@@ -136,7 +136,7 @@ Updated versions of the license will be published with the software distribution
 
 For licensing questions, partnerships, or enterprise deployments please contact:
 
-[support@plumoai.com](mailto:support@plumoai.com)
+[business@plumoai.com](mailto:business@plumoai.com)
 
 ---
 
