@@ -47,16 +47,17 @@ No feature restrictions.
 ---
 
 ## 🤝 Current Sponsors
-![KDS_Logo](https://github.com/user-attachments/assets/ac29912a-05ac-49e0-9ee8-a1c5367bdbec)
+<img width="284" height="75" alt="image" src="https://github.com/user-attachments/assets/8f3c549d-9eca-4a4d-a0ef-f38153929464" />
 
-Approaching to onboard 
-OpenAI: <img width="32" height="32" alt="image" src="https://github.com/user-attachments/assets/5920ad09-456c-4fce-b5a6-816c6cccc618" />
 
-anthropic: <img width="187" height="48" alt="image" src="https://github.com/user-attachments/assets/05f40114-b2bc-413e-8f67-62aba024802e" />
+### Approaching to onboard 
+<img width="32" height="32" alt="image" src="https://github.com/user-attachments/assets/5920ad09-456c-4fce-b5a6-816c6cccc618" />
 
-Cursor: <img width="225" height="225" alt="image" src="https://github.com/user-attachments/assets/234ec1a7-a750-475d-bdc7-56518b9cbc10" />
+<img width="187" height="48" alt="image" src="https://github.com/user-attachments/assets/05f40114-b2bc-413e-8f67-62aba024802e" />
 
-Lovable: <img width="318" height="159" alt="image" src="https://github.com/user-attachments/assets/c9a6b8f1-b49a-4bad-b0e4-363692151124" />
+<img width="225" height="225" alt="image" src="https://github.com/user-attachments/assets/234ec1a7-a750-475d-bdc7-56518b9cbc10" />
+
+<img width="318" height="159" alt="image" src="https://github.com/user-attachments/assets/c9a6b8f1-b49a-4bad-b0e4-363692151124" />
 
 
 and many more
