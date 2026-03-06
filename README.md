@@ -1,5 +1,6 @@
-<img width="1024" height="388" alt="PlumoAIlogo" src="https://github.com/user-attachments/assets/43d692bd-912c-44eb-b13b-0a2ed0a1ce6e" />
 # 🚀 PlumoAI
+<img width="1024" height="388" alt="PlumoAIlogo" src="https://github.com/user-attachments/assets/43d692bd-912c-44eb-b13b-0a2ed0a1ce6e" />
+
 ## 🌍 World's First Autonomous AI Employee Platform
 
 ![GitHub stars](https://img.shields.io/github/stars/PlumoAI/plumoai?style=social)
