@@ -1,478 +1,350 @@
-# PlumoAI
+# 🚀 PlumoAI
 
-## World's First Autonomous AI Employee Platform
+## 🌍 World's First Autonomous AI Employee Platform
 
-Hire and run **Autonomous AI Employees** inside your company in minutes.
-
-PlumoAI is a platform where organizations can create AI Employees that perform real work across sales, operations, research, development, and internal coordination.
-
-Unlike automation tools or AI agents, PlumoAI introduces a new system where **AI Employees operate as real organizational units of execution**.
-
-Each AI Employee works inside a built in **project management workspace**, uses external software through **App AI Agents**, and runs on your own infrastructure.
-
-PlumoAI integrates **OpenClaw** to enable reasoning, workflow generation, and autonomous execution.
+![GitHub stars](https://img.shields.io/github/stars/PlumoAI/plumoai?style=social)
+![License](https://img.shields.io/badge/license-PlumoAI-blue)
+![Docker](https://img.shields.io/badge/docker-supported-blue)
+![Self Hosted](https://img.shields.io/badge/self--hosted-free-green)
+![AI Employees](https://img.shields.io/badge/AI%20Employees-autonomous-purple)
 
 ---
 
-# Completely Free Self Hosted Platform
+## 🤖 Hire AI Employees In Minutes
+
+PlumoAI is the **world's first platform designed to run Autonomous AI Employees**.
+
+Companies do not hire people for their biology.
+They hire **employees to own work and deliver outcomes**.
+
+PlumoAI introduces a new system where **AI Employees operate as real organizational units of execution**.
+
+With PlumoAI you can:
+
+✨ Create unlimited AI Employees
+✨ Run them on your own infrastructure
+✨ Assign real responsibilities
+✨ Connect tools using App AI Agents
+✨ Manage work using a built in project management system
+
+---
+
+## 🆓 Completely Free Self Hosted
 
 PlumoAI can be deployed on your own infrastructure and used **completely free**.
 
-Individuals
-Startups
-Growing companies
-Enterprise organizations
+✔ Individuals
+✔ Startups
+✔ Growing teams
+✔ Enterprise companies
 
-Anyone can run unlimited AI Employees inside their organization.
+Everyone can run **unlimited AI Employees**.
 
-There are **no feature restrictions for self hosted deployments**.
-
-Organizations can optionally support development through the PlumoAI sponsorship program.
+No feature restrictions.
 
 ---
 
-# The Future of Work
+## 🧠 Powered By OpenClaw
 
-Companies do not hire people for their biology.
+PlumoAI integrates **OpenClaw** to provide advanced reasoning and autonomous workflow execution.
 
-They hire **employees to own work and deliver outcomes**.
+AI Employees can:
 
-An employee is not defined by being human.
+🧠 Plan tasks
+⚙️ Generate workflows
+🔄 Execute multi step operations
+📊 Interact with business systems
 
-An employee is a **system that executes responsibilities and produces results**.
-
-PlumoAI implements the architecture required to create **real AI Employees**, not just automation scripts or task based agents.
-
----
-
-# The Six Component Principle of an Employee
-
-Every real employee is defined by six core components.
-
-PlumoAI uses this principle to design Autonomous AI Employees.
+This enables true **autonomous execution** across company operations.
 
 ---
 
-## 1 Role
+# 🏢 The Six Component Principle of an Employee
+
+Every real employee is defined by **six core components**.
+
+PlumoAI implements this architecture for AI Employees.
+
+---
+
+## 🎯 Role
 
 Clear responsibility and scope of work.
 
-Examples
+Examples:
 
-Sales Assistant
-Business Development Executive
+Sales Executive
 Operations Manager
 Data Analyst
 Project Manager
 Software Developer
-Software Tester
 
-The role defines what outcomes the employee must deliver.
+The role defines the **outcomes the employee must deliver**.
 
 ---
 
-## 2 Tools
+## 🧰 Tools
 
 Software and systems the employee can operate.
 
-Examples
+Examples:
 
-CRM platforms
-Analytics systems
-Project management tools
-Communication platforms
+CRM systems
+Analytics platforms
+Communication tools
+Project management systems
 Databases
-Internal business applications
 
-In PlumoAI these tools are accessed through **App AI Agents**.
-
----
-
-## 3 Authorization
-
-Permissions that allow the employee to access systems and perform actions.
-
-Examples
-
-Read access to reports
-Write access to CRM records
-Delete access for cleanup tasks
-Access to internal tools and APIs
-
-Authorization ensures AI Employees operate within controlled boundaries.
+Tools are connected using **App AI Agents**.
 
 ---
 
-## 4 Memory
+## 🔐 Authorization
 
-Persistent understanding across time.
+Permissions that define what actions an employee can perform.
 
-Examples
+Examples:
 
-Conversations
-Task history
-Customer context
+Read company reports
+Write CRM records
+Update databases
+Access internal APIs
+
+Authorization ensures **controlled and secure operations**.
+
+---
+
+## 🧠 Memory
+
+Persistent knowledge across time.
+
+Examples:
+
+Past conversations
+Customer interactions
 Business decisions
-Operational knowledge
+Operational context
 
-Memory allows AI Employees to maintain continuity and improve decisions.
+Memory enables **continuous learning and improved outcomes**.
 
 ---
 
-## 5 Accountability
+## 📊 Accountability
 
-Ownership of outcomes and performance.
+Ownership of performance and results.
 
-Examples
+Examples:
 
 Response time
 Task completion
-Accuracy
-Operational impact
+Accuracy of work
+Operational outcomes
 
 AI Employees are accountable for delivering results.
 
 ---
 
-## 6 Presence
+## 👤 Presence
 
 How the employee interacts with the organization.
 
-Examples
+Examples:
 
-Chat interfaces
-Email communication
-Audio conversations
-Video interactions
-Future interfaces such as holographic presence or robotics
+Chat
+Email
+Audio communication
+Video interaction
+Future holographic or robotic interfaces
 
-Presence defines how employees participate in daily operations.
-
----
-
-# What PlumoAI Enables
-
-PlumoAI allows organizations to create an entire workforce of AI Employees.
-
-A founder can deploy multiple AI Employees instantly and assign them responsibilities across different departments.
-
-Capabilities include
-
-Create unlimited AI Employees
-Generate workflows automatically using prompts
-Run autonomous business operations
-Manage tasks inside a project workspace
-Integrate external applications through App AI Agents
-Deploy on private infrastructure using Docker
-
-With PlumoAI, a single founder can **hire an entire AI workforce in minutes**.
+Presence determines how employees **participate in daily operations**.
 
 ---
 
-# Built In Project Management Workspace
+# 🧩 App AI Agent Ecosystem
 
-PlumoAI includes a powerful project management environment where humans and AI Employees collaborate.
+PlumoAI supports an extensible ecosystem of **App AI Agents**.
 
-Teams can
+App AI Agents connect external systems to the platform using MCP servers.
 
-Create projects and tasks
-Assign work to AI Employees
-Track execution and outcomes
-Monitor operational performance
-Manage departments from a unified dashboard
+Examples:
+
+📧 Email platforms
+📊 Analytics tools
+💬 Messaging systems
+🗄 Databases
+📈 CRM platforms
+
+A single AI Employee can use **multiple App AI Agents simultaneously**.
+
+---
+
+# 🗂 Built In Project Management Workspace
+
+PlumoAI includes a full **project management system** where humans and AI Employees collaborate.
+
+You can:
+
+✔ Create projects and tasks
+✔ Assign work to AI Employees
+✔ Monitor execution
+✔ Manage teams and operations
 
 This makes PlumoAI not just an AI platform but a **complete operational workspace**.
 
 ---
 
-# App AI Agent Ecosystem
+# ⚙️ Installation
 
-PlumoAI supports an extensible ecosystem where developers and SaaS companies can build **App AI Agents**.
-
-App AI Agents connect external software to PlumoAI using MCP servers.
-
-These agents provide capabilities that AI Employees can use while performing work.
-
-Examples
-
-CRM integrations
-Email platforms
-Messaging tools
-Databases
-Analytics platforms
-Internal APIs
-
-A single AI Employee can use multiple App AI Agents simultaneously to execute complex workflows.
+PlumoAI runs using Docker.
 
 ---
 
-# Building App AI Agents
+## 🐧 Linux
 
-Developers and SaaS companies can build App AI Agents for their products.
+Install Docker then run:
 
-Typical process
-
-Build an App AI Agent following the PlumoAI architecture
-Connect your application using an MCP server
-Submit the integration for review
-Approved integrations become available in future platform releases
-
-This enables a growing ecosystem of integrations around AI Employees.
-
----
-
-# OpenClaw Integration
-
-PlumoAI integrates **OpenClaw** as part of its AI execution architecture.
-
-OpenClaw enables AI Employees to
-
-Reason about tasks
-Generate workflows automatically
-Plan multi step operations
-Execute actions across multiple systems
-
-This combination allows AI Employees to perform complex business operations autonomously.
-
----
-
-# Installation
-
-PlumoAI runs using Docker and can be deployed on Linux or Windows systems.
-
----
-
-## Linux Installation
-
-Install Docker on your server.
-
-Run
-
+```
 docker pull plumoai/platform
-
 docker run -p 3000:3000 plumoai/platform
+```
 
-Open
+Open:
 
+```
 http://localhost:3000
-
-You can now create AI Employees.
+```
 
 ---
 
-## Windows Installation
+## 🪟 Windows
 
-Install Docker Desktop.
+Install **Docker Desktop** and run:
 
-Run
-
+```
 docker pull plumoai/platform
-
 docker run -p 3000:3000 plumoai/platform
-
-Open
-
-http://localhost:3000
+```
 
 ---
 
-# Deployment Options
+# ☁️ Deployment Options
 
-PlumoAI can be used in two ways.
+PlumoAI can run in two ways.
 
-Self Hosted Deployment
+### Self Hosted
 
-Run the platform inside your own infrastructure using Docker.
+Run on your own infrastructure using Docker.
 
-Completely free with unlimited AI Employees.
+✔ Completely free
+✔ Unlimited AI Employees
+✔ Full data control
 
-PlumoAI Cloud
+---
 
-Managed infrastructure with usage based pricing starting with $20 credits.
+### PlumoAI Cloud
 
-Learn more
+Managed infrastructure with usage based credits.
+
+Starting from **$20 credits**.
+
+More info:
 
 https://plumoai.com/get-started
 
 ---
 
-# Sponsorship Program
+# 🤝 Sponsorship Program
 
-Organizations using PlumoAI can support development through the sponsorship program.
+Organizations can support the development of PlumoAI.
 
-Sponsors receive priority support and development assistance.
-
-Silver Sponsor
+### 🥈 Silver Sponsor
 
 Priority issue response
 Email support
 Roadmap updates
 Sponsor recognition
 
-Gold Sponsor
+### 🥇 Gold Sponsor
 
 Priority feature requests
 Private support channel
 Direct support calls
 AI Employee deployment consultation
-Private development support
 
-Learn more
+More info:
 
 https://plumoai.com/get-started
 
 ---
 
-# Community
+# 🗺 Product Roadmap
 
-PlumoAI is building a global ecosystem around AI Employees.
+### Phase 1 — Core Platform
 
-Developers
-Automation engineers
-AI builders
-SaaS companies
-Founders
-
-Together we are building the infrastructure where AI Employees work.
+AI Employee architecture
+OpenClaw integration
+Project management workspace
+Self hosted Docker deployment
 
 ---
 
-# License
+### Phase 2 — App AI Agent Ecosystem
+
+Developer framework for App AI Agents
+MCP based integrations
+Integration submission system
+
+---
+
+### Phase 3 — AI Employee Templates
+
+Pre built employees for:
+
+Sales
+Research
+Operations
+Marketing
+Product management
+
+---
+
+### Phase 4 — App Marketplace
+
+Community and SaaS integrations
+Verified App AI Agents
+Global ecosystem for AI Employees
+
+---
+
+# 🌎 Community
+
+Join the growing ecosystem around **Autonomous AI Employees**.
+
+Developers
+Founders
+Automation engineers
+SaaS companies
+
+Together we are building the **future of work**.
+
+---
+
+# 📜 License
 
 PlumoAI is distributed under the **PlumoAI Community License**.
 
-Users may deploy PlumoAI using official Docker images and run it internally within their organization.
+Users may run PlumoAI using official Docker images inside their organizations.
 
-Users may not resell the platform, redistribute Docker images, or operate PlumoAI as a competing SaaS service.
+Users may not:
 
-All intellectual property remains the property of PlumoAI Inc.
-
----
-
-# Vision
-
-The future of companies will include teams of **Autonomous AI Employees** working alongside humans.
-
-PlumoAI provides the infrastructure where those AI Employees operate.
-
-# Roadmap
-
-PlumoAI is evolving into a complete platform for building and running Autonomous AI Employees.
-Below is the current development roadmap.
+❌ Resell the platform
+❌ Redistribute Docker images
+❌ Operate PlumoAI as a competing SaaS service
 
 ---
 
-## Phase 1 – Core Platform Foundation
+# 🚀 Vision
 
-Status: In Progress
+The future of organizations will include teams of **Autonomous AI Employees** working alongside humans.
 
-Release of the core PlumoAI platform architecture.
-
-Features
-
-AI Employee creation system
-Six component employee architecture
-Integration with OpenClaw for reasoning and workflow generation
-Built in project management workspace
-Self hosted deployment using Docker
-Initial App AI Agent integration framework
-Basic AI Employee templates
-
-Goal
-
-Enable individuals and companies to create and operate AI Employees on their own infrastructure.
-
----
-
-## Phase 2 – App AI Agent Ecosystem
-
-Status: Planned
-
-Expansion of the App AI Agent ecosystem allowing external systems to integrate with AI Employees.
-
-Features
-
-Developer framework for building App AI Agents
-MCP based integration architecture
-Documentation and SDK for App AI Agent development
-Submission and review process for integrations
-Initial integrations for CRM, communication tools, and databases
-
-Goal
-
-Allow developers and SaaS companies to extend the capabilities of AI Employees.
-
----
-
-## Phase 3 – AI Employee Templates and Workforce Automation
-
-Status: Planned
-
-Introduction of pre built AI Employee templates designed for common business roles.
-
-Examples
-
-Sales Employee
-Research Employee
-Operations Employee
-Marketing Employee
-Product Employee
-
-Features
-
-Template based AI Employee deployment
-Automatic workflow generation from prompts
-Improved memory and reasoning capabilities
-Performance tracking and analytics
-
-Goal
-
-Allow founders to deploy complete AI workforces instantly.
-
----
-
-## Phase 4 – App AI Agent Marketplace
-
-Status: Future
-
-Creation of a marketplace for App AI Agents developed by the community and SaaS companies.
-
-Features
-
-App AI Agent directory
-Verified integrations
-Community developed integrations
-Partner integrations from SaaS platforms
-
-Goal
-
-Build a global ecosystem where AI Employees can interact with the entire software landscape.
-
----
-
-## Phase 5 – Enterprise Infrastructure
-
-Status: Future
-
-Advanced capabilities designed for enterprise scale deployments.
-
-Features
-
-Enterprise grade security controls
-Advanced authorization systems
-Private infrastructure management tools
-Enterprise monitoring and analytics
-Large scale AI Employee orchestration
-
-Goal
-
-Enable large organizations to operate entire departments using AI Employees.
-
----
-
-## Long Term Vision
-
-The future of organizations will include teams of Autonomous AI Employees working alongside humans.
-
-PlumoAI is building the infrastructure where these AI Employees operate, collaborate, and deliver outcomes.
-
+PlumoAI provides the infrastructure where these AI Employees operate.
