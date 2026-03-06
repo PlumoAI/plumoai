@@ -8,6 +8,7 @@
 ![Docker](https://img.shields.io/badge/docker-supported-blue)
 ![Self Hosted](https://img.shields.io/badge/self--hosted-free-green)
 ![AI Employees](https://img.shields.io/badge/AI%20Employees-autonomous-purple)
+![Security](https://img.shields.io/badge/security-report%20issues%20responsibly-green)
 
 ---
 
