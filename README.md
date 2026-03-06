@@ -46,6 +46,23 @@ No feature restrictions.
 
 ---
 
+## 🤝 Current Sponsors
+![KDS_Logo](https://github.com/user-attachments/assets/ac29912a-05ac-49e0-9ee8-a1c5367bdbec)
+
+Approaching to onboard 
+OpenAI: <img width="32" height="32" alt="image" src="https://github.com/user-attachments/assets/5920ad09-456c-4fce-b5a6-816c6cccc618" />
+
+anthropic: <img width="187" height="48" alt="image" src="https://github.com/user-attachments/assets/05f40114-b2bc-413e-8f67-62aba024802e" />
+
+Cursor: <img width="225" height="225" alt="image" src="https://github.com/user-attachments/assets/234ec1a7-a750-475d-bdc7-56518b9cbc10" />
+
+Lovable: <img width="318" height="159" alt="image" src="https://github.com/user-attachments/assets/c9a6b8f1-b49a-4bad-b0e4-363692151124" />
+
+
+and many more
+
+---
+
 ## 🧠 Powered By OpenClaw
 
 PlumoAI integrates **OpenClaw** to provide advanced reasoning and autonomous workflow execution.
