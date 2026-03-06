@@ -51,7 +51,8 @@ No feature restrictions.
 
 
 ### Approaching to onboard 
-<img width="32" height="32" alt="image" src="https://github.com/user-attachments/assets/5920ad09-456c-4fce-b5a6-816c6cccc618" />
+
+<img width="284" height="178" alt="image" src="https://github.com/user-attachments/assets/e9c4963d-a6e5-49f1-ad9d-e2b3b3caf33e" />
 
 <img width="187" height="48" alt="image" src="https://github.com/user-attachments/assets/05f40114-b2bc-413e-8f67-62aba024802e" />
 
