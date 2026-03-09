@@ -1,4 +1,4 @@
-# 🚀 PlumoAI
+# 🚀 PlumoAI (Still in Private Beta.. Connect me at krishna@plumoai.com for access. also we will provide docker file in a week time here)
 <img width="1024" height="388" alt="PlumoAIlogo" src="https://github.com/user-attachments/assets/43d692bd-912c-44eb-b13b-0a2ed0a1ce6e" />
 
 ## 🌍 World's First Autonomous AI Employee Platform OR you can say AI Employees OS (Operating System)
