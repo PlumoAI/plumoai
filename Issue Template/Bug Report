@@ -1,0 +1,180 @@
+name: 🐛 Bug Report
+description: Report a bug or unexpected behavior in PlumoAI
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 🐛 Thanks for taking the time to report a bug!
+
+        Before opening this issue, please:
+        - 🔍 **Search existing issues** to avoid duplicates
+        - 🔒 **Do NOT report security vulnerabilities here** — use [SECURITY.md](https://github.com/PlumoAI/plumoai/blob/main/SECURITY.md) instead
+        - 📧 For private beta access issues, contact **krishna@plumoai.com**
+
+        Fill in as much detail as you can — it helps us fix things faster.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: 🧩 Which PlumoAI component is affected?
+      description: Select the component where the bug occurs.
+      multiple: false
+      options:
+        - AI Employee (core behavior / reasoning)
+        - App AI Agent (MCP integration / tool connection)
+        - Project Management Workspace (tasks / projects / assignments)
+        - OpenClaw (workflow planning / execution)
+        - Authorization & Permissions
+        - Memory (persistence / context)
+        - Presence (chat / email / audio interface)
+        - Docker / Self-Hosted Deployment
+        - PlumoAI Cloud
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: 🚀 How are you running PlumoAI?
+      options:
+        - Self-hosted (Docker)
+        - PlumoAI Cloud
+        - Local development build
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 📋 Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: "When I do X, Y happens instead of Z..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 🔁 Steps to Reproduce
+      description: Exact steps to reproduce the behavior. The more specific, the better.
+      placeholder: |
+        1. Deploy PlumoAI using Docker
+        2. Create an AI Employee with role '...'
+        3. Connect App AI Agent for '...'
+        4. Assign task '...'
+        5. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: ✅ Expected Behavior
+      description: What did you expect to happen?
+      placeholder: "The AI Employee should have..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: ❌ Actual Behavior
+      description: What actually happened instead?
+      placeholder: "Instead, the AI Employee..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 📄 Error Logs / Console Output
+      description: |
+        Paste any relevant logs, stack traces, or error messages.
+        For Docker deployments: `docker logs <container_name>`
+      render: shell
+      placeholder: |
+        Paste logs here...
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 🖥️ Environment Details
+      description: Tell us about your setup.
+      value: |
+        - PlumoAI version / Docker image tag:
+        - OS: (e.g. Ubuntu 22.04, macOS 14, Windows 11)
+        - Docker version:
+        - Browser (if UI-related):
+        - LLM provider connected (if applicable):
+        - App AI Agents connected (if applicable):
+    validations:
+      required: true
+
+  - type: textarea
+    id: ai_employee_config
+    attributes:
+      label: 🤖 AI Employee Configuration (if relevant)
+      description: |
+        If the bug involves a specific AI Employee setup, describe its configuration.
+        Remove any sensitive information (API keys, credentials, etc.)
+      placeholder: |
+        - Role:
+        - Tools / App AI Agents connected:
+        - Authorization scope:
+        - Memory settings:
+        - Presence type:
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: 🔧 Workaround (if any)
+      description: Have you found any temporary way to get around this bug?
+      placeholder: "I was able to work around it by..."
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: 💥 Severity
+      description: How much does this bug impact your usage?
+      options:
+        - Critical — platform unusable / data loss
+        - High — core feature broken, no workaround
+        - Medium — feature partially broken, workaround exists
+        - Low — minor inconvenience
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 📸 Screenshots or Screen Recording
+      description: If applicable, add screenshots or a recording to help explain the issue.
+      placeholder: "Drag and drop images here, or paste a link..."
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: ✅ Pre-submission Checklist
+      options:
+        - label: I have searched existing issues and this is not a duplicate
+          required: true
+        - label: I have included all relevant logs and environment details
+          required: true
+        - label: I have removed any sensitive information (API keys, credentials) from this report
+          required: true
+        - label: This is not a security vulnerability (those go to SECURITY.md)
+          required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        💬 **Need faster help?** Join the conversation or reach out at **krishna@plumoai.com** for private beta access issues.
+        🌍 **Want to fix this yourself?** Check our [Contributing Guide](https://github.com/PlumoAI/plumoai/blob/main/CONTRIBUTING.md) — we welcome PRs!
