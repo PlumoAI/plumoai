@@ -1,0 +1,194 @@
+name: ✨ Feature Request
+description: Suggest a new feature or improvement for PlumoAI
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## ✨ Got an idea to make PlumoAI better?
+
+        PlumoAI is building the infrastructure for **Autonomous AI Employees** — and great ideas from the community shape the roadmap.
+
+        Before opening this request, please:
+        - 🔍 **Search existing issues and discussions** to avoid duplicates
+        - 💡 **Check the [Roadmap](https://github.com/PlumoAI/plumoai#product-roadmap)** — your idea may already be planned
+        - 🗣️ For broad ideas or early-stage discussions, consider opening a **GitHub Discussion** first
+
+  - type: dropdown
+    id: feature_area
+    attributes:
+      label: 🧩 Which area of PlumoAI does this feature relate to?
+      description: Select the most relevant component or area.
+      multiple: false
+      options:
+        - AI Employee (capabilities / behavior / reasoning)
+        - App AI Agent (new integration / MCP server)
+        - Project Management Workspace
+        - OpenClaw (workflow planning / execution)
+        - Authorization & Permissions
+        - Memory (persistence / long-term context)
+        - Presence (new interaction mode — chat / email / audio / video)
+        - Docker / Self-Hosted Deployment
+        - PlumoAI Cloud
+        - Developer SDK / API
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: feature_type
+    attributes:
+      label: 🏷️ What type of contribution is this?
+      options:
+        - New App AI Agent (new MCP integration)
+        - New AI Employee capability or behavior
+        - New Presence type (interaction interface)
+        - Workflow / automation improvement
+        - Developer tooling or SDK
+        - UI / UX improvement
+        - Performance improvement
+        - Documentation improvement
+        - Other enhancement
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 🎯 What problem does this solve?
+      description: |
+        Describe the problem or limitation you are facing.
+        Frame it around a real use case — what are you trying to accomplish with PlumoAI?
+      placeholder: |
+        As someone running PlumoAI for [use case], I want to be able to [action],
+        but currently [limitation / pain point].
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: 💡 Describe the Feature You'd Like
+      description: |
+        Explain your proposed solution clearly. How should it work?
+        Think in terms of PlumoAI's architecture — AI Employees, App AI Agents, the Six Component Principle (Role, Tools, Authorization, Memory, Accountability, Presence).
+      placeholder: |
+        I would like PlumoAI to...
+        
+        This would work by...
+        
+        An AI Employee using this feature would be able to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: app_ai_agent
+    attributes:
+      label: 🔌 If proposing a new App AI Agent — which platform/tool?
+      description: |
+        If you are requesting integration with a specific external system, describe it here.
+        Include what actions the AI Employee should be able to perform via this agent.
+      placeholder: |
+        Platform / Tool: (e.g. Salesforce, Notion, Slack, PostgreSQL...)
+        
+        Actions the AI Employee should be able to perform:
+        - Read: ...
+        - Write: ...
+        - Trigger: ...
+        
+        MCP server (if one already exists): ...
+        
+        Relevant API documentation: ...
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 🔄 Alternatives You've Considered
+      description: Have you thought of other ways to solve this? Why is your proposed approach better?
+      placeholder: "I also considered... but that doesn't work because..."
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: 🏢 Real-World Use Case
+      description: |
+        Describe a concrete example of how this feature would be used in a real organization.
+        This helps the team understand impact and prioritization.
+      placeholder: |
+        Example: A Sales Executive AI Employee using this feature would be able to
+        automatically pull deal data from [CRM], summarize it, and update the
+        project management workspace — without human intervention.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 📊 How important is this to your workflow?
+      options:
+        - Critical — blocking my use of PlumoAI
+        - High — significantly improves my workflow
+        - Medium — useful but I have a workaround
+        - Low — nice to have
+    validations:
+      required: true
+
+  - type: dropdown
+    id: willing_to_contribute
+    attributes:
+      label: 🙋 Are you willing to contribute this feature?
+      description: Let us know if you'd like to build this yourself!
+      options:
+        - "Yes — I plan to open a PR for this"
+        - "Yes — I can contribute partially (e.g. docs, tests, design)"
+        - "No — I'm requesting this for the team to build"
+        - "Not sure yet"
+    validations:
+      required: true
+
+  - type: textarea
+    id: implementation_notes
+    attributes:
+      label: 🛠️ Implementation Notes (optional)
+      description: |
+        If you have technical ideas on how this could be implemented, share them here.
+        Relevant files, APIs, MCP server references, architecture suggestions — anything helps.
+      placeholder: |
+        This could be implemented by...
+        
+        Relevant files in the repo: ...
+        
+        External API / MCP server reference: ...
+
+  - type: textarea
+    id: mockups
+    attributes:
+      label: 🎨 Mockups / Diagrams (optional)
+      description: If you have any wireframes, diagrams, or visual ideas, attach them here.
+      placeholder: "Drag and drop images here, or paste a link..."
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: ✅ Pre-submission Checklist
+      options:
+        - label: I have searched existing issues and discussions — this is not a duplicate
+          required: true
+        - label: I have checked the roadmap and this is not already planned
+          required: true
+        - label: I have described a real use case, not just an abstract idea
+          required: true
+        - label: I understand this is a request, not a guarantee of implementation
+          required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        🚀 **Ready to build it?** Check our [Contributing Guide](https://github.com/PlumoAI/plumoai/blob/main/CONTRIBUTING.md) to get started with a PR.
+        💬 **Want to discuss first?** Open a [GitHub Discussion](https://github.com/PlumoAI/plumoai/discussions) for broader brainstorming.
+        🤝 **Interested in sponsorship or partnership?** Reach out at [plumoai.com/get-started](https://plumoai.com/get-started)
