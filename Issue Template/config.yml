@@ -1,0 +1,18 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: 💬 Community Discussion
+    url: https://github.com/PlumoAI/plumoai/discussions
+    about: Ask questions, share ideas, or start a broader conversation with the PlumoAI community.
+
+  - name: 🔒 Security Vulnerability
+    url: https://github.com/PlumoAI/plumoai/blob/main/SECURITY.md
+    about: Please DO NOT open a public issue for security vulnerabilities. Follow our responsible disclosure process.
+
+  - name: 📧 Private Beta Access
+    url: mailto:krishna@plumoai.com
+    about: For private beta access, deployment help, or partnership inquiries — contact krishna@plumoai.com
+
+  - name: 🌐 PlumoAI Website & Cloud
+    url: https://plumoai.com/get-started
+    about: Learn about PlumoAI Cloud, sponsorship, and enterprise options.
