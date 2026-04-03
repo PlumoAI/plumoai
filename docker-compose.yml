@@ -1,0 +1,333 @@
+services:
+  # ------------------- Traefik (Reverse Proxy) -------------------
+  traefik:
+    image: traefik:v3.6
+    container_name: traefik
+    restart: always
+    deploy:
+      resources:
+        limits: { memory: 256M }
+        reservations: { memory: 64M }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    command:
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.allowEmptyServices=true"
+      - "--serversTransport.forwardingTimeouts.responseHeaderTimeout=0"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.mytlschallenge.acme.tlschallenge=true"
+      - "--certificatesresolvers.mytlschallenge.acme.email=${SSL_EMAIL}"
+      - "--certificatesresolvers.mytlschallenge.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:443:443"
+    volumes:
+      - traefik_data:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - frontend
+      - internal
+
+  # Main app → https://self.plumoai.com (DOMAIN_NAME) — low priority so /api/* goes to auth/company
+  main-app:
+    image: plumoai/plumoai-app:${PLUMOAI_VERSION:-v1.0.1}
+    container_name: main-app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits: { memory: 512M }
+        reservations: { memory: 128M }
+    networks:
+      - internal
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.main.service=main"
+      - "traefik.http.middlewares.sec-headers.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.sec-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.sec-headers.headers.stsPreload=true"
+      - "traefik.http.middlewares.sec-headers.headers.customFrameOptionsValue=SAMEORIGIN"
+      - "traefik.http.middlewares.sec-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.sec-headers.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.ratelimit.ratelimit.average=200"
+      - "traefik.http.middlewares.ratelimit.ratelimit.burst=100"
+      - "traefik.http.routers.main.rule=Host(`${DOMAIN_NAME}`)"
+      - "traefik.http.routers.main.entrypoints=websecure"
+      - "traefik.http.routers.main.tls.certresolver=mytlschallenge"
+      - "traefik.http.routers.main.priority=1"
+      - "traefik.http.routers.main.middlewares=sec-headers,ratelimit"
+      - "traefik.http.services.main.loadbalancer.server.port=80"
+
+  # Auth API → https://self.plumoai.com/api/auth (priority so path wins over main)
+  # internal = reach MySQL (hostname "mysql"); frontend = outbound internet (e.g. api.plumoai.com)
+  # Secrets are mounted read-only at /run/secrets/<name>.
+  auth:
+    image: plumoai/authservice:${PLUMOAI_VERSION:-v1.0.1}
+    container_name: auth-service
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      # Image has no curl; use Node to check port 3000.
+      # interval 30s (not 15s) to avoid cold-starting a full Node process
+      # every 15 seconds, which causes CPU spikes on constrained hosts.
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/', r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.50"      # prevent runaway CPU; auth is I/O-bound, 0.5 core is ample
+        reservations:
+          memory: 128M
+          cpus: "0.10"
+    networks:
+      - frontend
+      - internal
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    environment:
+      NODE_ENV: production   # enables V8 opts, disables dev middleware, reduces CPU/RAM
+      DB_HOST: ${DB_HOST:-mysql}
+      DB_PORT: ${DB_PORT:-3306}
+    secrets:
+      - mysql_db
+      - mysql_user
+      - mysql_password
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.auth.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/api/auth`)"
+      - "traefik.http.routers.auth.entrypoints=websecure"
+      - "traefik.http.routers.auth.tls.certresolver=mytlschallenge"
+      - "traefik.http.routers.auth.priority=200"
+      - "traefik.http.routers.auth.service=auth"
+      - "traefik.http.services.auth.loadbalancer.server.port=3000"
+      - "traefik.http.middlewares.auth-strip.stripprefix.prefixes=/api/auth"
+      - "traefik.http.routers.auth.middlewares=auth-strip,sec-headers,ratelimit"
+
+  # ------------------- Company Service -------------------
+  company:
+    image: plumoai/api-service:${PLUMOAI_VERSION:-v1.0.1}
+    container_name: api-service
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      # Image has no curl; use Node to check port 3001.
+      # interval 30s to avoid cold-starting Node every 15s (CPU spike).
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001/', r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.75"      # company handles DB + S3 + AI calls; slightly more headroom
+        reservations:
+          memory: 128M
+          cpus: "0.10"
+    networks:
+      - frontend
+      - internal
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT:-3001}
+      DB_HOST: ${DB_HOST:-mysql}
+      DB_PORT: ${DB_PORT:-3306}
+      MONGODB_HOST: ${MONGODB_HOST:-mongodb}
+      MONGODB_PORT: ${MONGODB_PORT:-27017}
+      Auth_URL: ${Auth_URL:-http://auth:3000}
+      PLUMOAI_DIGITAL_EMPLOYEE_API_URL: ${PLUMOAI_DIGITAL_EMPLOYEE_API_URL:-http://ai:3002}
+      AWS_S3_BUCKET:  ${AWS_S3_BUCKET}
+      AWS_REGION: ${AWS_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    secrets:
+      - mysql_db
+      - mysql_user
+      - mysql_password
+      - mongo_db
+      - mongo_user
+      - mongo_password
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/api/company`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls.certresolver=mytlschallenge"
+      - "traefik.http.routers.api.priority=100"
+      - "traefik.http.services.api.loadbalancer.server.port=3001"
+      - "traefik.http.middlewares.api-strip.stripprefix.prefixes=/api/company"
+      - "traefik.http.routers.api.middlewares=api-strip,sec-headers,ratelimit"
+
+  # ------------------- AI Service (internal only — no exposed URL) -------------------
+  # Other services call it by hostname: http://ai:<port> (e.g. http://ai:3000)
+  # platform: linux/amd64 ensures the AMD64 image is used on ARM hosts (Windows/Linux ARM).
+  # On native AMD64 hosts this is a no-op. Requires QEMU binfmt_misc on ARM hosts:
+  #   docker run --privileged --rm tonistiigi/binfmt --install all
+  ai:
+    image: plumoai/ai-service:${PLUMOAI_VERSION:-v1.0.1}
+    platform: linux/amd64
+    container_name: ai-service
+    restart: unless-stopped
+    healthcheck:
+      # Python image: use python urllib to check the port; reads PORT env var dynamically
+      test: ["CMD-SHELL", "python -c \"import urllib.request,os; urllib.request.urlopen('http://localhost:'+os.environ.get('PORT','3002')+'/', timeout=5)\" 2>/dev/null && exit 0 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits: { memory: 1G }
+        reservations: { memory: 256M }
+    volumes:
+      - ./app_agents:/opt/plumoai/app_agents:ro
+    environment:
+      PLUMOAI_APP_AGENTS_EXTERNAL_DIR: /opt/plumoai/app_agents
+      AUTH_URL: ${AUTH_URL:-http://auth:3000}
+      COMPANY_URL: ${COMPANY_URL:-http://company:3001}
+      PORT: ${PORT:-3002}
+    networks:
+      - internal   # talk to auth/company/db services
+      - frontend   # reach external APIs (OpenRouter, OpenAI, etc.)
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    # No Traefik labels — not exposed to the internet
+
+  # ------------------- MySQL Database -------------------
+  mysql:
+    image: mysql:8.0
+    container_name: plumoai-mysql
+    restart: unless-stopped
+    entrypoint: ["/scripts/mysql-root-secrets-entrypoint.sh"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --log-bin-trust-function-creators=1
+      - --lower_case_table_names=1
+    environment:
+      MYSQL_DATABASE_FILE: /run/secrets/mysql_db
+      MYSQL_USER_FILE: /run/secrets/mysql_user
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_password
+      MYSQL_ROOT_HOST: "%"
+    secrets:
+      - mysql_db
+      - mysql_user
+      - mysql_password
+      - mysql_root_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./scripts/mysql-root-secrets-entrypoint.sh:/scripts/mysql-root-secrets-entrypoint.sh:ro
+      - ./init-privileges.sql:/docker-entrypoint-initdb.d/01-init-privileges.sql:ro
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits: { memory: 1G }
+        reservations: { memory: 256M }
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ------------------- MongoDB (own secrets: mongo_db, mongo_user, mongo_password) -------------------
+  mongodb:
+    image: mongo:7
+    container_name: plumoai-mongodb
+    restart: unless-stopped
+    healthcheck:
+      # mongosh spawns a heavy Node.js process; --quiet + 30s interval reduce CPU overhead.
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    # WiredTiger cache = ~50% of container memory limit.
+    # 512M cap starves the cache (only ~256MB), causing heavy I/O and slow
+    # serverStatus/health-check responses. Raise to 1G to match MySQL.
+    command: ["--wiredTigerCacheSizeGB", "0.5"]
+    entrypoint: ["/scripts/mongo-secrets-entrypoint.sh"]
+    volumes:
+      - ./scripts/mongo-secrets-entrypoint.sh:/scripts/mongo-secrets-entrypoint.sh:ro
+      - ./scripts/init-mongo-user.sh:/docker-entrypoint-initdb.d/init-mongo-user.sh:ro
+      - mongo_data:/data/db
+    secrets:
+      - mongo_db
+      - mongo_user
+      - mongo_password
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits: { memory: 1G }
+        reservations: { memory: 256M }
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ------------------- Networks -------------------
+# frontend: normal network so Traefik gets host port bindings (80, 443)
+# internal: isolated (no outbound); backends + Traefik for backend access
+networks:
+  frontend:
+  internal:
+    internal: true
+
+# ------------------- Volumes -------------------
+volumes:
+  traefik_data:
+  mysql_data:
+  mongo_data:
+
+# ------------------- Secrets -------------------
+secrets:
+  mysql_db:
+    file: ./secrets/mysql_db.txt
+  mysql_user:
+    file: ./secrets/mysql_user.txt
+  mysql_password:
+    file: ./secrets/mysql_password.txt
+  mysql_root_password:
+    file: ./secrets/mysql_root_password.txt
+  mongo_db:
+    file: ./secrets/mongo_db.txt
+  mongo_user:
+    file: ./secrets/mongo_user.txt
+  mongo_password:
+    file: ./secrets/mongo_password.txt
