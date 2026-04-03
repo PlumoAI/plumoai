@@ -230,10 +230,10 @@ services:
     entrypoint: ["/scripts/mysql-root-secrets-entrypoint.sh"]
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
     command:
       - --default-authentication-plugin=mysql_native_password
       - --log-bin-trust-function-creators=1
