@@ -1,0 +1,13 @@
+{
+  "plugin_id": "calculator_datetime",
+  "app_codes": ["calculator_datetime"],
+  "type": "python_tool_agent",
+  "display_name": "Calculator & DateTime",
+  "description": "Basic arithmetic and date/time operations.",
+  "entrypoint": "entrypoint.py",
+  "version": "0.1.0",
+  "core_min_version": "0.1.0",
+  "auto_attach_to_all_agents": true,
+  "permissions": []
+}
+

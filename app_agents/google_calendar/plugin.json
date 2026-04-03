@@ -1,0 +1,12 @@
+{
+  "plugin_id": "google_calendar",
+  "app_codes": ["google_calendar"],
+  "type": "python_tool_agent",
+  "display_name": "Google Calendar Agent",
+  "description": "Manages Google Calendar events, availability, and scheduling.",
+  "entrypoint": "entrypoint.py",
+  "version": "0.1.0",
+  "core_min_version": "0.1.0",
+  "permissions": ["network"]
+}
+

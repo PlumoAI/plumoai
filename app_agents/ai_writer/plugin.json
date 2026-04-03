@@ -1,0 +1,13 @@
+{
+  "plugin_id": "ai_writer",
+  "app_codes": ["ai_writer"],
+  "type": "python_tool_agent",
+  "display_name": "AI Writer",
+  "description": "Generate high-quality business communication (emails, messages, reports, documents) quickly and professionally from user prompts and available context.",
+  "entrypoint": "entrypoint.py",
+  "version": "0.1.0",
+  "core_min_version": "0.1.0",
+  "auto_attach_to_all_agents": true,
+  "permissions": []
+}
+

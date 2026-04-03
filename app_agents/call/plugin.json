@@ -1,0 +1,12 @@
+{
+  "plugin_id": "call",
+  "app_codes": ["call"],
+  "type": "python_tool_agent",
+  "display_name": "Call Agent",
+  "description": "Initiates and manages voice calls connected to the AI agent.",
+  "entrypoint": "entrypoint.py",
+  "version": "0.1.0",
+  "core_min_version": "0.1.0",
+  "permissions": ["network"]
+}
+
