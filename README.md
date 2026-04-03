@@ -1,7 +1,10 @@
-# 🚀 PlumoAI (Still in Private Beta.. Connect me at krishna@plumoai.com for access. also we will provide docker file in a week time here)
-<img width="1024" height="388" alt="PlumoAIlogo" src="https://github.com/user-attachments/assets/43d692bd-912c-44eb-b13b-0a2ed0a1ce6e" />
+# PlumoAI
 
-## 🌍 World's First Autonomous AI Employee Platform OR you can say AI Employees OS (Operating System)
+Still in **private beta** -- email **krishna@plumoai.com** for access. Official single-image Docker packaging is rolling out; this repository includes a **full Compose installer** (`install.ps1` / `install.sh`).
+
+![PlumoAI logo](https://github.com/user-attachments/assets/43d692bd-912c-44eb-b13b-0a2ed0a1ce6e)
+
+## Autonomous AI employee platform (AI Employees OS)
 
 ![GitHub stars](https://img.shields.io/github/stars/PlumoAI/plumoai?style=social)
 ![License](https://img.shields.io/badge/license-PlumoAI-blue)
@@ -12,360 +15,162 @@
 
 ---
 
-## 🤖 Hire AI Employees In Minutes
+## Hire AI employees in minutes
 
-PlumoAI is the **world's first platform designed to run Autonomous AI Employees**.
-
-Companies do not hire people for their biology.
-They hire **employees to own work and deliver outcomes**.
-
-PlumoAI introduces a new system where **AI Employees operate as real organizational units of execution**.
-
-With PlumoAI you can:
-
-✨ Create unlimited AI Employees
-✨ Run them on your own infrastructure
-✨ Assign real responsibilities
-✨ Connect tools using App AI Agents
-✨ Manage work using a built in project management system
+PlumoAI is the platform for **autonomous AI employees**: own work, deliver outcomes, run on your infrastructure, connect tools with App AI agents, and use built-in project management.
 
 ---
 
-## 🆓 Completely Free Self Hosted
+## Completely free self-hosted
 
-PlumoAI can be deployed on your own infrastructure and used **completely free**.
-
-✔ Individuals
-✔ Startups
-✔ Growing teams
-✔ Enterprise companies
-
-Everyone can run **unlimited AI Employees**.
-
-No feature restrictions.
+Individuals, startups, teams, and enterprises -- deploy on your own infrastructure with no artificial caps on AI employees for self-hosted use.
 
 ---
 
-## 🤝 Current Sponsors
-<img width="284" height="75" alt="image" src="https://github.com/user-attachments/assets/8f3c549d-9eca-4a4d-a0ef-f38153929464" />
+## Current sponsors
 
+![Sponsor](https://github.com/user-attachments/assets/8f3c549d-9eca-4a4d-a0ef-f38153929464)
 
-### Approaching to onboard below 
+### Approaching to onboard
 
-<img width="284" height="178" alt="image" src="https://github.com/user-attachments/assets/e9c4963d-a6e5-49f1-ad9d-e2b3b3caf33e" />
+![Partner](https://github.com/user-attachments/assets/e9c4963d-a6e5-49f1-ad9d-e2b3b3caf33e)
 
-<img width="187" height="48" alt="image" src="https://github.com/user-attachments/assets/05f40114-b2bc-413e-8f67-62aba024802e" />
+![Partner](https://github.com/user-attachments/assets/05f40114-b2bc-413e-8f67-62aba024802e)
 
-<img width="225" height="225" alt="image" src="https://github.com/user-attachments/assets/234ec1a7-a750-475d-bdc7-56518b9cbc10" />
+![Partner](https://github.com/user-attachments/assets/234ec1a7-a750-475d-bdc7-56518b9cbc10)
 
-<img width="318" height="159" alt="image" src="https://github.com/user-attachments/assets/c9a6b8f1-b49a-4bad-b0e4-363692151124" />
-
-
-and many more
+![Partner](https://github.com/user-attachments/assets/c9a6b8f1-b49a-4bad-b0e4-363692151124)
 
 ---
 
-## 🧠 Powered By OpenClaw
+## Powered by OpenClaw
 
-PlumoAI integrates **OpenClaw** to provide advanced reasoning and autonomous workflow execution.
-
-AI Employees can:
-
-🧠 Plan tasks
-⚙️ Generate workflows
-🔄 Execute multi step operations
-📊 Interact with business systems
-
-This enables true **autonomous execution** across company operations.
+Advanced reasoning, planning, and multi-step autonomous workflows across your systems.
 
 ---
 
-# 🏢 The Six Component Principle of an Employee
+## The six components of an employee
 
-Every real employee is defined by **six core components**.
-
-PlumoAI implements this architecture for AI Employees.
+**Role**, **tools** (App AI agents), **authorization**, **memory**, **accountability**, and **presence** (chat, email, voice, and more).
 
 ---
 
-## 🎯 Role
+## App AI agent ecosystem
 
-Clear responsibility and scope of work.
-
-Examples:
-
-Sales Executive
-Operations Manager
-Data Analyst
-Project Manager
-Software Developer
-
-The role defines the **outcomes the employee must deliver**.
+MCP-backed integrations: email, analytics, messaging, databases, CRM, and more.
 
 ---
 
-## 🧰 Tools
+## Built-in project management
 
-Software and systems the employee can operate.
-
-Examples:
-
-CRM systems
-Analytics platforms
-Communication tools
-Project management systems
-Databases
-
-Tools are connected using **App AI Agents**.
+Projects, tasks, assignments to AI employees, monitoring, and human collaboration.
 
 ---
 
-## 🔐 Authorization
+## Installation (from Git -- recommended)
 
-Permissions that define what actions an employee can perform.
+Start from the **installer** after cloning -- **not** from quickstart. Quickstart zip/curl is optional; see [INSTALL.md](INSTALL.md).
 
-Examples:
+### Prerequisites
 
-Read company reports
-Write CRM records
-Update databases
-Access internal APIs
+- Docker Engine and **Docker Compose v2** (Docker Desktop on Windows).
 
-Authorization ensures **controlled and secure operations**.
+### 1. Clone
 
----
-
-## 🧠 Memory
-
-Persistent knowledge across time.
-
-Examples:
-
-Past conversations
-Customer interactions
-Business decisions
-Operational context
-
-Memory enables **continuous learning and improved outcomes**.
-
----
-
-## 📊 Accountability
-
-Ownership of performance and results.
-
-Examples:
-
-Response time
-Task completion
-Accuracy of work
-Operational outcomes
-
-AI Employees are accountable for delivering results.
-
----
-
-## 👤 Presence
-
-How the employee interacts with the organization.
-
-Examples:
-
-Chat
-Email
-Audio communication
-Video interaction
-Future holographic or robotic interfaces
-
-Presence determines how employees **participate in daily operations**.
-
----
-
-# 🧩 App AI Agent Ecosystem
-
-PlumoAI supports an extensible ecosystem of **App AI Agents**.
-
-App AI Agents connect external systems to the platform using MCP servers.
-
-Examples:
-
-📧 Email platforms
-📊 Analytics tools
-💬 Messaging systems
-🗄 Databases
-📈 CRM platforms
-
-A single AI Employee can use **multiple App AI Agents simultaneously**.
-
----
-
-# 🗂 Built In Project Management Workspace
-
-PlumoAI includes a full **project management system** where humans and AI Employees collaborate.
-
-You can:
-
-✔ Create projects and tasks
-✔ Assign work to AI Employees
-✔ Monitor execution
-✔ Manage teams and operations
-
-This makes PlumoAI not just an AI platform but a **complete operational workspace**.
-
----
-
-# ⚙️ Installation
-
-PlumoAI runs using Docker.
-
----
-
-## 🐧 Linux
-
-Install Docker then run:
-
+```bash
+git clone https://github.com/PlumoAI/plumoai.git
+cd plumoai
 ```
+
+Run the next steps from the folder that contains `docker-compose.yml`, `install.ps1`, and `install.sh` (if your monorepo keeps the stack in a subfolder, `cd` there).
+
+**Dedicated self-hosted repo (same installer):** [github.com/PlumoAI/PlumoAi-Self-Hosted](https://github.com/PlumoAI/PlumoAi-Self-Hosted)
+
+### 2. Optional: `.env`
+
+Create `.env` for domain mode, localhost port, optional AWS variables. Examples in [INSTALL.md](INSTALL.md). If you skip this, the installer prompts when run interactively.
+
+### 3. Run the installer
+
+**Windows (PowerShell):**
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+**Linux / macOS / WSL / Git Bash:**
+
+```bash
+chmod +x install.sh
+./install.sh
+```
+
+### 4. Fresh MySQL reset (optional)
+
+```powershell
+.\install.ps1 -Fresh
+```
+
+```bash
+./install.sh --fresh
+```
+
+### 5. Open the app
+
+| Mode | URL |
+|------|-----|
+| Localhost | `http://localhost:<PORT>` (`LOCALHOST_PORT` in `.env`) |
+| Domain | `https://<your-domain>` (Let's Encrypt via Traefik) |
+
+### Alternative: packaged quickstart
+
+[INSTALL.md](INSTALL.md) documents `quickstart.ps1` / `quickstart.sh` for versioned zip downloads.
+
+### Single-image preview (when published)
+
+```bash
 docker pull plumoai/platform
 docker run -p 3000:3000 plumoai/platform
 ```
 
-Open:
-
-```
-http://localhost:3000
-```
+The **full** product stack runs via the **Git installer** and Compose.
 
 ---
 
-## 🪟 Windows
+## Deployment options
 
-Install **Docker Desktop** and run:
-
-```
-docker pull plumoai/platform
-docker run -p 3000:3000 plumoai/platform
-```
+- **Self-hosted:** free, your infrastructure -- use the Git installer above.
+- **PlumoAI Cloud:** managed, usage credits from **$20** -- [plumoai.com/get-started](https://plumoai.com/get-started)
 
 ---
 
-# ☁️ Deployment Options
+## Sponsorship program
 
-PlumoAI can run in two ways.
-
-### Self Hosted
-
-Run on your own infrastructure using Docker.
-
-✔ Completely free
-✔ Unlimited AI Employees
-✔ Full data control
+Silver and Gold tiers -- [plumoai.com/get-started](https://plumoai.com/get-started)
 
 ---
 
-### PlumoAI Cloud
+## Product roadmap
 
-Managed infrastructure with usage based credits.
-
-Starting from **$20 credits**.
-
-More info:
-
-https://plumoai.com/get-started
+1. Core platform, OpenClaw, PM workspace, self-hosted Docker
+2. App AI agent ecosystem and MCP integrations
+3. AI employee templates (sales, research, ops, marketing, PM)
+4. App marketplace
 
 ---
 
-# 🤝 Sponsorship Program
+## Community
 
-Organizations can support the development of PlumoAI.
-
-### 🥈 Silver Sponsor
-
-Priority issue response
-Email support
-Roadmap updates
-Sponsor recognition
-
-### 🥇 Gold Sponsor
-
-Priority feature requests
-Private support channel
-Direct support calls
-AI Employee deployment consultation
-
-More info:
-
-https://plumoai.com/get-started
+Developers, founders, automation engineers, and SaaS teams building autonomous AI employees.
 
 ---
 
-# 🗺 Product Roadmap
+## License
 
-### Phase 1 — Core Platform
-
-AI Employee architecture
-OpenClaw integration
-Project management workspace
-Self hosted Docker deployment
+**PlumoAI Community License** -- run official deployments in your organization; no reselling, unauthorized redistribution of images, or competing SaaS without permission.
 
 ---
 
-### Phase 2 — App AI Agent Ecosystem
+## Vision
 
-Developer framework for App AI Agents
-MCP based integrations
-Integration submission system
-
----
-
-### Phase 3 — AI Employee Templates
-
-Pre built employees for:
-
-Sales
-Research
-Operations
-Marketing
-Product management
-
----
-
-### Phase 4 — App Marketplace
-
-Community and SaaS integrations
-Verified App AI Agents
-Global ecosystem for AI Employees
-
----
-
-# 🌎 Community
-
-Join the growing ecosystem around **Autonomous AI Employees**.
-
-Developers
-Founders
-Automation engineers
-SaaS companies
-
-Together we are building the **future of work**.
-
----
-
-# 📜 License
-
-PlumoAI is distributed under the **PlumoAI Community License**.
-
-Users may run PlumoAI using official Docker images inside their organizations.
-
-Users may not:
-
-❌ Resell the platform
-❌ Redistribute Docker images
-❌ Operate PlumoAI as a competing SaaS service
-
----
-
-# 🚀 Vision
-
-The future of organizations will include teams of **Autonomous AI Employees** working alongside humans.
-
-PlumoAI provides the infrastructure where these AI Employees operate.
+Teams of **autonomous AI employees** alongside humans -- PlumoAI is the infrastructure where they operate.
