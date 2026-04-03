@@ -7,7 +7,7 @@ param([switch]$Fresh)
 $ErrorActionPreference = "Stop"
 
 function Write-PlumoInstallBanner {
-    # Terminal wordmark (purple "Plumo", cyan-blue "Ai") - matches brand; PNG at assets/plumoai-logo.png
+    # Terminal wordmark (purple "Plumo", cyan-blue "Ai") — matches brand; PNG at assets/plumoai-logo.png
     Write-Host ""
     Write-Host "  " -NoNewline
     Write-Host "Plumo" -NoNewline -ForegroundColor DarkMagenta
@@ -179,6 +179,27 @@ foreach ($s in $secrets) {
         Write-Host "  Keeping existing $($s.Name)"
     }
 }
+
+# Docker bind-mounts .sh from Windows with CRLF: dash sees "set -e^M" -> "set: Illegal option -". Force LF.
+function Repair-DockerMountLineEndings {
+    param([string]$Root)
+    $toFix = @()
+    $scriptsDir = Join-Path $Root "scripts"
+    if (Test-Path $scriptsDir) {
+        $toFix += Get-ChildItem -Path $scriptsDir -Filter "*.sh" -File -ErrorAction SilentlyContinue
+    }
+    $sql = Join-Path $Root "init-privileges.sql"
+    if (Test-Path $sql) { $toFix += Get-Item $sql }
+    foreach ($item in $toFix) {
+        if (-not $item) { continue }
+        $text = [IO.File]::ReadAllText($item.FullName)
+        if ($text.IndexOf("`r") -lt 0) { continue }
+        $fixed = $text -replace "`r`n", "`n" -replace "`r", "`n"
+        [IO.File]::WriteAllText($item.FullName, $fixed, [Text.UTF8Encoding]::new($false))
+        Write-Host "  Fixed Windows line endings: $($item.Name)" -ForegroundColor DarkGray
+    }
+}
+Repair-DockerMountLineEndings -Root $PSScriptRoot
 
 # Build docker compose args
 $dockerArgs = @("compose", "--env-file", $ENV_FILE, "-f", "docker-compose.yml")

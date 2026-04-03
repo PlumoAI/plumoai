@@ -205,6 +205,18 @@ chmod 600 secrets/* 2>/dev/null || true
 [ -f scripts/init-mongo-user.sh ] && chmod +x scripts/init-mongo-user.sh
 [ -f scripts/mysql-root-secrets-entrypoint.sh ] && chmod +x scripts/mysql-root-secrets-entrypoint.sh
 
+# Strip CR from compose-mounted scripts (Windows CRLF breaks dash: "set: Illegal option -")
+repair_docker_mount_lf() {
+  for f in "$SCRIPT_DIR/scripts/"*.sh "$SCRIPT_DIR/init-privileges.sql"; do
+    [ -f "$f" ] || continue
+    if grep -q $'\r' "$f" 2>/dev/null; then
+      tr -d '\r' < "$f" > "${f}.lf.$$" && mv "${f}.lf.$$" "$f"
+      echo "  Fixed Windows line endings: $(basename "$f")"
+    fi
+  done
+}
+repair_docker_mount_lf
+
 COMPOSE_FILES="-f docker-compose.yml"
 [ "$RUN_MODE" = "localhost" ] && COMPOSE_FILES="-f docker-compose.yml -f docker-compose.local.yml"
 
