@@ -1,7 +1,7 @@
 ## 🚀 PlumoAI - We are in Beta. If you find any issues during setup then Join our Discord Live Support call on https://discord.gg/WarY2yWZkg 
 <img width="1024" height="388" alt="PlumoAIlogo" src="https://github.com/user-attachments/assets/43d692bd-912c-44eb-b13b-0a2ed0a1ce6e" />
 
-## 🌍 World's First Autonomous AI Employee Platform OR you can say AI Employees OS (Operating System)
+## 🌍 World's First 100% FREE Autonomous AI Employee Platform OR you can say AI Employees OS (Operating System)
 
 ![GitHub stars](https://img.shields.io/github/stars/PlumoAI/plumoai?style=social)
 ![License](https://img.shields.io/badge/license-PlumoAI-blue)
@@ -12,7 +12,7 @@
 
 ---
 
-## 🤖 Hire AI Employees In Minutes
+## 🤖 Hire AI Employees In Minutes. Works like human
 
 PlumoAI is the **world's first platform designed to run Autonomous AI Employees**.
 
@@ -26,7 +26,7 @@ With PlumoAI you can:
 ✨ Create unlimited AI Employees
 ✨ Run them on your own infrastructure
 ✨ Assign real responsibilities
-✨ Connect tools using App AI Agents
+✨ Connect tools using AI Agents
 ✨ Manage work using a built in project management system
 
 ---
@@ -67,7 +67,7 @@ and many more
 
 ## 🧠 Powered By OpenClaw
 
-PlumoAI integrates **OpenClaw** to provide advanced reasoning and autonomous workflow execution.
+PlumoAI integrates **OpenClaw** (We have added this as an AI Agent) to provide advanced reasoning and autonomous workflow execution.
 
 AI Employees can:
 
