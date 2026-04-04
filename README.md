@@ -116,7 +116,7 @@ Communication tools
 Project management systems
 Databases
 
-Tools are connected using **App AI Agents**.
+Tools are connected using **AI Agents**.
 
 ---
 
@@ -181,11 +181,11 @@ Presence determines how employees **participate in daily operations**.
 
 ---
 
-# 🧩 App AI Agent Ecosystem
+# 🧩 AI Agent Ecosystem
 
-PlumoAI supports an extensible ecosystem of **App AI Agents**.
+PlumoAI supports an extensible ecosystem of **AI Agents**.
 
-App AI Agents connect external systems to the platform using MCP servers.
+AI Agents connect external systems to the platform using MCP servers or any specific agent.
 
 Examples:
 
@@ -194,8 +194,14 @@ Examples:
 💬 Messaging systems
 🗄 Databases
 📈 CRM platforms
+or some of like
+Scheduler
+Workflow Builder
+Memory
+ChartMaker
+etc.
 
-A single AI Employee can use **multiple App AI Agents simultaneously**.
+A single AI Employee (Just like human) can use **multiple AI Agents simultaneously**.
 
 ---
 
@@ -266,7 +272,7 @@ chmod +x install.sh
 
 | Mode | URL |
 |------|-----|
-| Localhost | `http://localhost:<PORT>` (`LOCALHOST_PORT` in `.env`) |
+| Localhost | `http://localhost:<PORT like 7861 defaut>` (`LOCALHOST_PORT` in `.env`) |
 | Domain | `https://<your-domain>` (Let's Encrypt via Traefik) |
 
 ### Alternative: packaged quickstart
@@ -294,13 +300,14 @@ Run on your own infrastructure using Docker.
 
 ✔ Completely free
 ✔ Unlimited AI Employees
+✔ Unlimited Project Management including web documentation
 ✔ Full data control
 
 ---
 
 ### PlumoAI Cloud
 
-Managed infrastructure with usage based credits.
+If you dont want to FREE setup on your cloud or local machine then you can use our managed infrastructure with usage based credits.
 
 Starting from **$20 credits**.
 
@@ -334,7 +341,7 @@ https://plumoai.com/get-started
 
 ---
 
-# 🗺 Product Roadmap
+# 🗺 Product Roadmap (Work in Progress)
 
 ### Phase 1 — Core Platform
 
@@ -345,9 +352,9 @@ Self hosted Docker deployment
 
 ---
 
-### Phase 2 — App AI Agent Ecosystem
+### Phase 2 — AI Agent Ecosystem
 
-Developer framework for App AI Agents
+Developer framework for AI Agents
 MCP based integrations
 Integration submission system
 
@@ -357,19 +364,12 @@ Integration submission system
 
 Pre built employees for:
 
-Sales
-Research
-Operations
-Marketing
-Product management
+Sales - like AI Sales Managers, AI Sales Executive etc
+Research - AI Research Manager
+Operations - AI Operationo Manager
+Marketing - AI Marketing Manager
+Product management - AI Product Manager
 
----
-
-### Phase 4 — App Marketplace
-
-Community and SaaS integrations
-Verified App AI Agents
-Global ecosystem for AI Employees
 
 ---
 
