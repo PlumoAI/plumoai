@@ -47,7 +47,7 @@ AI Agents allow AI Employees to interact with real software systems.
 
 Developers and SaaS companies can build integrations for their platforms.
 
-Examples of App AI Agents:
+Examples of AI Agents:
 
 📧 Email platforms
 📊 Analytics systems
@@ -55,6 +55,11 @@ Examples of App AI Agents:
 🗄 Databases
 📈 CRM platforms
 ⚙️ Internal APIs
+Scheduler
+Workflow Builder
+Chart Maker
+Writter
+etc.
 
 A single AI Employee can use **multiple AI Agents simultaneously**.
 
