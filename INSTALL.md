@@ -110,7 +110,7 @@ powershell -ExecutionPolicy Bypass -File quickstart.ps1
 | `SSL_EMAIL`     | Required    | Ignored        |
 | `LOCALHOST_PORT`| Ignored     | Optional (default: 80) |
 
----
+----
 
 ## Troubleshooting
 
