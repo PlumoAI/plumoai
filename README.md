@@ -1,4 +1,4 @@
-# 🚀 PlumoAI (We are in Beta. If you find any issues during setup then Join our Discord Live Support call on https://discord.gg/WarY2yWZkg 
+## 🚀 PlumoAI - We are in Beta. If you find any issues during setup then Join our Discord Live Support call on https://discord.gg/WarY2yWZkg 
 <img width="1024" height="388" alt="PlumoAIlogo" src="https://github.com/user-attachments/assets/43d692bd-912c-44eb-b13b-0a2ed0a1ce6e" />
 
 ## 🌍 World's First Autonomous AI Employee Platform OR you can say AI Employees OS (Operating System)
