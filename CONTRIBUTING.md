@@ -41,9 +41,9 @@ docs/
 
 ---
 
-## 🧩 Build App AI Agents
+## 🧩 Build AI Agents
 
-App AI Agents allow AI Employees to interact with real software systems.
+AI Agents allow AI Employees to interact with real software systems.
 
 Developers and SaaS companies can build integrations for their platforms.
 
@@ -56,7 +56,7 @@ Examples of App AI Agents:
 📈 CRM platforms
 ⚙️ Internal APIs
 
-A single AI Employee can use **multiple App AI Agents simultaneously**.
+A single AI Employee can use **multiple AI Agents simultaneously**.
 
 ---
 
@@ -110,11 +110,11 @@ Feature ideas can be shared through **GitHub Discussions**.
 
 ---
 
-# ⚙️ Building App AI Agents
+# ⚙️ Building AI Agents
 
-PlumoAI supports an extensible ecosystem where developers can build **App AI Agents**.
+PlumoAI supports an extensible ecosystem where developers can build **AI Agents**.
 
-App AI Agents connect external applications to AI Employees using MCP servers.
+AI Agents connect external applications to AI Employees using MCP servers.
 
 ### Typical Development Process
 
@@ -122,7 +122,7 @@ App AI Agents connect external applications to AI Employees using MCP servers.
 2️⃣ Connect the integration using an MCP server
 3️⃣ Define actions that AI Employees can perform
 4️⃣ Test the integration with PlumoAI
-5️⃣ Submit your App AI Agent for review
+5️⃣ Submit your AI Agent for review
 
 Approved integrations may become part of the official ecosystem.
 
