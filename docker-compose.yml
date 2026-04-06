@@ -182,14 +182,15 @@ services:
       PLUMOAI_DIGITAL_EMPLOYEE_API_URL: ${PLUMOAI_DIGITAL_EMPLOYEE_API_URL:-http://ai:3002}
       MILVUS_URL: "http://milvus-standalone:19530"
       STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
-      LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_PATH:-/data/plumoai/storage}
+      # IMPORTANT: inside-container path must be Linux-style (Windows host paths break bind mount syntax)
+      LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_CONTAINER_PATH:-/data/plumoai/storage}
       AWS_S3_BUCKET:  ${AWS_S3_BUCKET}
       AWS_REGION: ${AWS_REGION}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     volumes:
-      # When STORAGE_BACKEND=local, mount the host folder into the container at the same path.
-      - ${LOCAL_STORAGE_PATH:-./storage}:${LOCAL_STORAGE_PATH:-/data/plumoai/storage}
+      # Host path can be Windows (e.g. D:\...\storage). Container path must be POSIX.
+      - ${LOCAL_STORAGE_HOST_PATH:-./storage}:${LOCAL_STORAGE_CONTAINER_PATH:-/data/plumoai/storage}
     secrets:
       - mysql_db
       - mysql_user

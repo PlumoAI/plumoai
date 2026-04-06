@@ -229,7 +229,8 @@ function Test-StorageBackendNeedsPrompt {
 }
 
 $STORAGE_BACKEND = Get-EnvValue $ENV_FILE "STORAGE_BACKEND"
-$LOCAL_STORAGE_PATH = Get-EnvValue $ENV_FILE "LOCAL_STORAGE_PATH"
+$LOCAL_STORAGE_HOST_PATH = Get-EnvValue $ENV_FILE "LOCAL_STORAGE_HOST_PATH"
+$LOCAL_STORAGE_CONTAINER_PATH = Get-EnvValue $ENV_FILE "LOCAL_STORAGE_CONTAINER_PATH"
 
 if ([Environment]::UserInteractive -and (Test-StorageBackendNeedsPrompt $STORAGE_BACKEND)) {
     Write-Host ""
@@ -262,10 +263,14 @@ if ($STORAGE_BACKEND -eq "s3") {
 } else {
     # Local storage uses a folder next to docker-compose.yml
     $defaultLocal = (Join-Path $PSScriptRoot "storage")
-    $localPath = if ([string]::IsNullOrWhiteSpace($LOCAL_STORAGE_PATH) -or ($LOCAL_STORAGE_PATH -like "*<*")) { $defaultLocal } else { $LOCAL_STORAGE_PATH }
+    $localPath = if ([string]::IsNullOrWhiteSpace($LOCAL_STORAGE_HOST_PATH) -or ($LOCAL_STORAGE_HOST_PATH -like "*<*")) { $defaultLocal } else { $LOCAL_STORAGE_HOST_PATH }
     New-Item -ItemType Directory -Force -Path $localPath | Out-Null
     $resolved = (Resolve-Path $localPath).Path
-    Set-EnvValue $ENV_FILE "LOCAL_STORAGE_PATH" $resolved
+    Set-EnvValue $ENV_FILE "LOCAL_STORAGE_HOST_PATH" $resolved
+
+    # Container path must be POSIX (do not use drive-letter paths inside containers)
+    $containerPath = if ([string]::IsNullOrWhiteSpace($LOCAL_STORAGE_CONTAINER_PATH) -or ($LOCAL_STORAGE_CONTAINER_PATH -like "*<*")) { "/data/plumoai/storage" } else { $LOCAL_STORAGE_CONTAINER_PATH }
+    Set-EnvValue $ENV_FILE "LOCAL_STORAGE_CONTAINER_PATH" $containerPath
 }
 
 Write-Host "Setting up secrets..." -ForegroundColor Cyan

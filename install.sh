@@ -275,7 +275,8 @@ normalize_storage_backend() {
 }
 
 STORAGE_BACKEND=$(get_env_value STORAGE_BACKEND)
-LOCAL_STORAGE_PATH=$(get_env_value LOCAL_STORAGE_PATH)
+LOCAL_STORAGE_HOST_PATH=$(get_env_value LOCAL_STORAGE_HOST_PATH)
+LOCAL_STORAGE_CONTAINER_PATH=$(get_env_value LOCAL_STORAGE_CONTAINER_PATH)
 
 if [ -t 0 ] && storage_backend_needs_prompt "$STORAGE_BACKEND"; then
   echo ""
@@ -310,9 +311,13 @@ if [ "$STORAGE_BACKEND" = "s3" ]; then
   fi
 else
   # Local storage uses a folder next to docker-compose.yml
-  LOCAL_STORAGE_PATH="${LOCAL_STORAGE_PATH:-$SCRIPT_DIR/storage}"
-  mkdir -p "$LOCAL_STORAGE_PATH"
-  set_env_key LOCAL_STORAGE_PATH "$LOCAL_STORAGE_PATH"
+  LOCAL_STORAGE_HOST_PATH="${LOCAL_STORAGE_HOST_PATH:-$SCRIPT_DIR/storage}"
+  mkdir -p "$LOCAL_STORAGE_HOST_PATH"
+  set_env_key LOCAL_STORAGE_HOST_PATH "$LOCAL_STORAGE_HOST_PATH"
+
+  # Container path must be POSIX (do not use Windows drive-letter paths inside containers)
+  LOCAL_STORAGE_CONTAINER_PATH="${LOCAL_STORAGE_CONTAINER_PATH:-/data/plumoai/storage}"
+  set_env_key LOCAL_STORAGE_CONTAINER_PATH "$LOCAL_STORAGE_CONTAINER_PATH"
 fi
 
 echo "Setting up secrets..."
