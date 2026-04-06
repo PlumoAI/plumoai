@@ -30,6 +30,20 @@ for arg in "$@"; do
   esac
 done
 
+# --- compose shim (docker compose vs docker-compose) ---
+# Some hosts ship Docker Engine without the Compose v2 plugin; others only have the legacy docker-compose binary.
+# We prefer `docker compose` when available, then fall back to `docker-compose`.
+COMPOSE_BIN=""
+if docker compose version >/dev/null 2>&1; then
+  COMPOSE_BIN="docker compose"
+elif command -v docker-compose >/dev/null 2>&1; then
+  COMPOSE_BIN="docker-compose"
+else
+  echo "Error: Docker Compose not found." >&2
+  echo "Install the Compose plugin (recommended) or docker-compose binary, then retry." >&2
+  exit 1
+fi
+
 # --- .env (current dir or parent, same as install.ps1) ---
 ENV_FILE=""
 [ -f "../.env" ] && ENV_FILE="../.env"
@@ -172,6 +186,135 @@ if [ "$RUN_MODE" != "localhost" ]; then
   fi
 fi
 
+email_provider_needs_prompt() {
+  local p="$1"
+  [[ -z "$p" || "$p" == *"<"* ]]
+}
+
+EMAIL_PROVIDER=$(get_env_value EMAIL_PROVIDER)
+if email_provider_needs_prompt "$EMAIL_PROVIDER" && [ -t 0 ]; then
+  echo ""
+  echo "Optional: auth service email only (password reset, verification, etc.)"
+  echo "  The rest of the install (secrets, databases, Docker) runs no matter what you pick."
+  echo "  1) Configure email now (SES or SMTP)"
+  echo "  2) Turn off outbound email (EMAIL_PROVIDER=disabled)"
+  echo "  3) Skip email setup for now (EMAIL_PROVIDER=none; edit .env later — still installs everything else)"
+  read -r -p "Email option [1/2/3]: " em_choice
+  case "${em_choice:-}" in
+    2)
+      set_env_key EMAIL_PROVIDER "disabled"
+      ;;
+    3)
+      set_env_key EMAIL_PROVIDER "none"
+      ;;
+    1)
+      echo "Transport:"
+      echo "  1) Amazon SES (default)"
+      echo "  2) SMTP"
+      read -r -p "Choose [1/2]: " tx_choice
+      read -r -p "MAIL_FROM address [Enter for app default PlumoAi<noreply@plumoai.com>]: " mf_val
+      case "${tx_choice:-1}" in
+        2)
+          set_env_key EMAIL_PROVIDER "smtp"
+          read -r -p "SMTP_HOST (required): " sh_val
+          if [[ -z "$sh_val" ]]; then
+            echo "Error: SMTP_HOST is required for SMTP." >&2
+            exit 1
+          fi
+          set_env_key SMTP_HOST "$sh_val"
+          read -r -p "SMTP_PORT [587]: " sp_val
+          sp_val="${sp_val:-587}"
+          set_env_key SMTP_PORT "$sp_val"
+          read -r -p "SMTP_USER [optional]: " su_val
+          set_env_key SMTP_USER "${su_val:-}"
+          read -r -p "SMTP_PASS [optional]: " spw_val
+          set_env_key SMTP_PASS "${spw_val:-}"
+          read -r -p "SMTP_SECURE (TLS for port 465) [y/N]: " ss_val
+          if [[ "$ss_val" =~ ^[yY] ]]; then
+            set_env_key SMTP_SECURE "true"
+          else
+            set_env_key SMTP_SECURE "false"
+          fi
+          if [[ -n "$mf_val" ]]; then
+            set_env_key MAIL_FROM "$mf_val"
+          fi
+          ;;
+        *)
+          set_env_key EMAIL_PROVIDER "ses"
+          read -r -p "ACCESSKEYID (AWS for SES): " ak_val
+          read -r -p "SECRETACCESSKEY (AWS for SES): " sk_val
+          read -r -p "REGION (e.g. us-east-1): " rg_val
+          if [[ -z "$ak_val" || -z "$sk_val" || -z "$rg_val" ]]; then
+            echo "Error: ACCESSKEYID, SECRETACCESSKEY, and REGION are required for SES." >&2
+            exit 1
+          fi
+          set_env_key ACCESSKEYID "$ak_val"
+          set_env_key SECRETACCESSKEY "$sk_val"
+          set_env_key REGION "$rg_val"
+          if [[ -n "$mf_val" ]]; then
+            set_env_key MAIL_FROM "$mf_val"
+          fi
+          ;;
+      esac
+      ;;
+  esac
+fi
+
+storage_backend_needs_prompt() {
+  local v="$1"
+  [[ -z "$v" || "$v" == *"<"* ]]
+}
+
+normalize_storage_backend() {
+  local v
+  v="$(echo "${1:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  case "$v" in
+    s3|local) echo "$v" ;;
+    *) echo "" ;;
+  esac
+}
+
+STORAGE_BACKEND=$(get_env_value STORAGE_BACKEND)
+LOCAL_STORAGE_PATH=$(get_env_value LOCAL_STORAGE_PATH)
+
+if [ -t 0 ] && storage_backend_needs_prompt "$STORAGE_BACKEND"; then
+  echo ""
+  echo "File storage (company service uploads):"
+  echo "  1) Local disk (default)"
+  echo "  2) S3"
+  read -r -p "Choose [1/2] (Enter = 1): " st_choice
+  case "${st_choice:-1}" in
+    2) STORAGE_BACKEND="s3" ;;
+    *) STORAGE_BACKEND="local" ;;
+  esac
+  set_env_key STORAGE_BACKEND "$STORAGE_BACKEND"
+fi
+
+# Default to local if unset/invalid (non-interactive installs)
+STORAGE_BACKEND="$(normalize_storage_backend "$STORAGE_BACKEND")"
+STORAGE_BACKEND="${STORAGE_BACKEND:-local}"
+set_env_key STORAGE_BACKEND "$STORAGE_BACKEND"
+
+if [ "$STORAGE_BACKEND" = "s3" ]; then
+  if [ -t 0 ]; then
+    echo ""
+    echo "S3 configuration (required for STORAGE_BACKEND=s3):"
+    read -r -p "AWS_S3_BUCKET: " AWS_S3_BUCKET
+    read -r -p "AWS_REGION: " AWS_REGION
+    read -r -p "AWS_ACCESS_KEY_ID: " AWS_ACCESS_KEY_ID
+    read -r -p "AWS_SECRET_ACCESS_KEY: " AWS_SECRET_ACCESS_KEY
+    set_env_key AWS_S3_BUCKET "$AWS_S3_BUCKET"
+    set_env_key AWS_REGION "$AWS_REGION"
+    set_env_key AWS_ACCESS_KEY_ID "$AWS_ACCESS_KEY_ID"
+    set_env_key AWS_SECRET_ACCESS_KEY "$AWS_SECRET_ACCESS_KEY"
+  fi
+else
+  # Local storage uses a folder next to docker-compose.yml
+  LOCAL_STORAGE_PATH="${LOCAL_STORAGE_PATH:-$SCRIPT_DIR/storage}"
+  mkdir -p "$LOCAL_STORAGE_PATH"
+  set_env_key LOCAL_STORAGE_PATH "$LOCAL_STORAGE_PATH"
+fi
+
 echo "Setting up secrets..."
 
 mkdir -p secrets
@@ -223,13 +366,13 @@ COMPOSE_FILES="-f docker-compose.yml"
 ENV_ARGS=""
 [ -f "$ENV_FILE" ] && ENV_ARGS="--env-file $ENV_FILE"
 
-PS_HINT="docker compose $ENV_ARGS -f docker-compose.yml"
+PS_HINT="$COMPOSE_BIN $ENV_ARGS -f docker-compose.yml"
 [ "$RUN_MODE" = "localhost" ] && PS_HINT="$PS_HINT -f docker-compose.local.yml ps"
 
 echo "Starting services..."
 if [ "$FRESH" = true ]; then
   echo "  Fresh install: stopping existing stack..."
-  if ! docker compose $ENV_ARGS $COMPOSE_FILES down --remove-orphans --timeout 20 2>/dev/null; then
+  if ! $COMPOSE_BIN $ENV_ARGS $COMPOSE_FILES down --remove-orphans --timeout 20 2>/dev/null; then
     echo "Error: failed to stop existing services (fresh mode)." >&2
     exit 1
   fi
@@ -239,7 +382,7 @@ else
   echo "  Existing stack detected: applying changes without full restart..."
 fi
 echo "  (First run: pulling images and starting DBs may take 5-10 min)"
-if ! docker compose $ENV_ARGS $COMPOSE_FILES up -d --remove-orphans; then
+if ! $COMPOSE_BIN $ENV_ARGS $COMPOSE_FILES up -d --remove-orphans; then
   echo "Error: failed to start services. Run '$PS_HINT' for details." >&2
   exit 1
 fi

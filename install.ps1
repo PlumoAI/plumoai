@@ -7,7 +7,7 @@ param([switch]$Fresh)
 $ErrorActionPreference = "Stop"
 
 function Write-PlumoInstallBanner {
-    # Terminal wordmark (purple "Plumo", cyan-blue "Ai") — matches brand; PNG at assets/plumoai-logo.png
+    # Terminal wordmark (purple "Plumo", cyan-blue "Ai") - matches brand; PNG at assets/plumoai-logo.png
     Write-Host ""
     Write-Host "  " -NoNewline
     Write-Host "Plumo" -NoNewline -ForegroundColor DarkMagenta
@@ -153,6 +153,119 @@ if ($RUN_MODE -ne "localhost") {
         Write-Host "Error: For domain mode, DOMAIN_NAME and SSL_EMAIL must be set in .env (or run interactively)" -ForegroundColor Red
         exit 1
     }
+}
+
+function Test-EmailProviderNeedsPrompt {
+    param([string]$Val)
+    return [string]::IsNullOrWhiteSpace($Val) -or ($Val -like "*<*" )
+}
+
+$EMAIL_PROVIDER = Get-EnvValue $ENV_FILE "EMAIL_PROVIDER"
+if ([Environment]::UserInteractive -and (Test-EmailProviderNeedsPrompt $EMAIL_PROVIDER)) {
+    Write-Host ""
+    Write-Host "Optional: auth service email only (password reset, verification, etc.)"
+    Write-Host "  The rest of the install (secrets, databases, Docker) runs no matter what you pick."
+    Write-Host "  1) Configure email now (SES or SMTP)"
+    Write-Host "  2) Turn off outbound email (EMAIL_PROVIDER=disabled)"
+    Write-Host "  3) Skip email setup for now (EMAIL_PROVIDER=none; edit .env later - still installs everything else)"
+    $emChoice = Read-Host "Email option [1/2/3]"
+    if ($emChoice -eq "2") {
+        Set-EnvValue $ENV_FILE "EMAIL_PROVIDER" "disabled"
+    } elseif ($emChoice -eq "3") {
+        Set-EnvValue $ENV_FILE "EMAIL_PROVIDER" "none"
+    } elseif ($emChoice -eq "1") {
+        Write-Host "Transport:"
+        Write-Host "  1) Amazon SES (default)"
+        Write-Host "  2) SMTP"
+        $tx = Read-Host "Choose [1/2]"
+        $mf = Read-Host "MAIL_FROM address [Enter for app default PlumoAi<noreply@plumoai.com>]"
+        if ($tx -eq "2") {
+            Set-EnvValue $ENV_FILE "EMAIL_PROVIDER" "smtp"
+            $sh = Read-Host "SMTP_HOST (required)"
+            if ([string]::IsNullOrWhiteSpace($sh)) {
+                Write-Host "Error: SMTP_HOST is required for SMTP." -ForegroundColor Red
+                exit 1
+            }
+            Set-EnvValue $ENV_FILE "SMTP_HOST" $sh
+            $sp = Read-Host "SMTP_PORT [587]"
+            if ([string]::IsNullOrWhiteSpace($sp)) { $sp = "587" }
+            Set-EnvValue $ENV_FILE "SMTP_PORT" $sp
+            $su = Read-Host "SMTP_USER [optional]"
+            Set-EnvValue $ENV_FILE "SMTP_USER" $su
+            $spw = Read-Host "SMTP_PASS [optional]"
+            Set-EnvValue $ENV_FILE "SMTP_PASS" $spw
+            $ss = Read-Host "SMTP_SECURE (TLS for port 465) [y/N]"
+            $ssVal = if ($ss -match '^[yY]') { "true" } else { "false" }
+            Set-EnvValue $ENV_FILE "SMTP_SECURE" $ssVal
+            if (![string]::IsNullOrWhiteSpace($mf)) { Set-EnvValue $ENV_FILE "MAIL_FROM" $mf }
+        } else {
+            Set-EnvValue $ENV_FILE "EMAIL_PROVIDER" "ses"
+            $ak = Read-Host "ACCESSKEYID (AWS for SES)"
+            $sk = Read-Host "SECRETACCESSKEY (AWS for SES)"
+            $rg = Read-Host "REGION (e.g. us-east-1)"
+            if ([string]::IsNullOrWhiteSpace($ak) -or [string]::IsNullOrWhiteSpace($sk) -or [string]::IsNullOrWhiteSpace($rg)) {
+                Write-Host "Error: ACCESSKEYID, SECRETACCESSKEY, and REGION are required for SES." -ForegroundColor Red
+                exit 1
+            }
+            Set-EnvValue $ENV_FILE "ACCESSKEYID" $ak
+            Set-EnvValue $ENV_FILE "SECRETACCESSKEY" $sk
+            Set-EnvValue $ENV_FILE "REGION" $rg
+            if (![string]::IsNullOrWhiteSpace($mf)) { Set-EnvValue $ENV_FILE "MAIL_FROM" $mf }
+        }
+    }
+}
+
+function Normalize-StorageBackend {
+    param([string]$Val)
+    if ([string]::IsNullOrWhiteSpace($Val)) { return "" }
+    $v = $Val.Trim().ToLowerInvariant()
+    if ($v -eq "s3" -or $v -eq "local") { return $v }
+    return ""
+}
+
+function Test-StorageBackendNeedsPrompt {
+    param([string]$Val)
+    return [string]::IsNullOrWhiteSpace($Val) -or ($Val -like "*<*")
+}
+
+$STORAGE_BACKEND = Get-EnvValue $ENV_FILE "STORAGE_BACKEND"
+$LOCAL_STORAGE_PATH = Get-EnvValue $ENV_FILE "LOCAL_STORAGE_PATH"
+
+if ([Environment]::UserInteractive -and (Test-StorageBackendNeedsPrompt $STORAGE_BACKEND)) {
+    Write-Host ""
+    Write-Host "File storage (company service uploads):"
+    Write-Host "  1) Local disk (default)"
+    Write-Host "  2) S3"
+    $stChoice = Read-Host "Choose [1/2] (Enter = 1)"
+    if ($stChoice -eq "2") { $STORAGE_BACKEND = "s3" } else { $STORAGE_BACKEND = "local" }
+    Set-EnvValue $ENV_FILE "STORAGE_BACKEND" $STORAGE_BACKEND
+}
+
+# Default to local if unset/invalid (non-interactive installs)
+$STORAGE_BACKEND = Normalize-StorageBackend $STORAGE_BACKEND
+if ([string]::IsNullOrWhiteSpace($STORAGE_BACKEND)) { $STORAGE_BACKEND = "local" }
+Set-EnvValue $ENV_FILE "STORAGE_BACKEND" $STORAGE_BACKEND
+
+if ($STORAGE_BACKEND -eq "s3") {
+    if ([Environment]::UserInteractive) {
+        Write-Host ""
+        Write-Host "S3 configuration (required for STORAGE_BACKEND=s3):"
+        $AWS_S3_BUCKET = Read-Host "AWS_S3_BUCKET"
+        $AWS_REGION = Read-Host "AWS_REGION"
+        $AWS_ACCESS_KEY_ID = Read-Host "AWS_ACCESS_KEY_ID"
+        $AWS_SECRET_ACCESS_KEY = Read-Host "AWS_SECRET_ACCESS_KEY"
+        Set-EnvValue $ENV_FILE "AWS_S3_BUCKET" $AWS_S3_BUCKET
+        Set-EnvValue $ENV_FILE "AWS_REGION" $AWS_REGION
+        Set-EnvValue $ENV_FILE "AWS_ACCESS_KEY_ID" $AWS_ACCESS_KEY_ID
+        Set-EnvValue $ENV_FILE "AWS_SECRET_ACCESS_KEY" $AWS_SECRET_ACCESS_KEY
+    }
+} else {
+    # Local storage uses a folder next to docker-compose.yml
+    $defaultLocal = (Join-Path $PSScriptRoot "storage")
+    $localPath = if ([string]::IsNullOrWhiteSpace($LOCAL_STORAGE_PATH) -or ($LOCAL_STORAGE_PATH -like "*<*")) { $defaultLocal } else { $LOCAL_STORAGE_PATH }
+    New-Item -ItemType Directory -Force -Path $localPath | Out-Null
+    $resolved = (Resolve-Path $localPath).Path
+    Set-EnvValue $ENV_FILE "LOCAL_STORAGE_PATH" $resolved
 }
 
 Write-Host "Setting up secrets..." -ForegroundColor Cyan
