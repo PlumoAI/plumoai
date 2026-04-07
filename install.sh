@@ -311,12 +311,18 @@ if [ "$STORAGE_BACKEND" = "s3" ]; then
   fi
 else
   # Local storage uses a folder next to docker-compose.yml
-  LOCAL_STORAGE_HOST_PATH="${LOCAL_STORAGE_HOST_PATH:-$SCRIPT_DIR/storage}"
+  # If .env was created from .env.example it may contain placeholders like "<PATH_TO_REPO>/storage".
+  # Treat placeholder values as unset and replace with a real path.
+  if [[ -z "${LOCAL_STORAGE_HOST_PATH:-}" || "${LOCAL_STORAGE_HOST_PATH}" == *"<"* ]]; then
+    LOCAL_STORAGE_HOST_PATH="$SCRIPT_DIR/storage"
+  fi
   mkdir -p "$LOCAL_STORAGE_HOST_PATH"
   set_env_key LOCAL_STORAGE_HOST_PATH "$LOCAL_STORAGE_HOST_PATH"
 
   # Container path must be POSIX (do not use Windows drive-letter paths inside containers)
-  LOCAL_STORAGE_CONTAINER_PATH="${LOCAL_STORAGE_CONTAINER_PATH:-/data/plumoai/storage}"
+  if [[ -z "${LOCAL_STORAGE_CONTAINER_PATH:-}" || "${LOCAL_STORAGE_CONTAINER_PATH}" == *"<"* ]]; then
+    LOCAL_STORAGE_CONTAINER_PATH="/data/plumoai/storage"
+  fi
   set_env_key LOCAL_STORAGE_CONTAINER_PATH "$LOCAL_STORAGE_CONTAINER_PATH"
 fi
 

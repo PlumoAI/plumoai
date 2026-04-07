@@ -227,13 +227,13 @@ For production, use **domain mode** (HTTPS with Let's Encrypt). For local evalua
 
 ### System requirements
 
-- **Minimum (local evaluation / small team)**
+- **Minimum**
   - **CPU**: 2 vCPU
-  - **RAM**: 8 GB
+  - **RAM**: **16 GB** (required; the full stack needs enough headroom for MySQL, MongoDB, Milvus, and services)
   - **Disk**: 30 GB free (SSD recommended)
 - **Recommended (production)**
   - **CPU**: 4+ vCPU
-  - **RAM**: 16+ GB
+  - **RAM**: 32+ GB
   - **Disk**: 100+ GB SSD (depends on file uploads + vector DB size)
 - **Network (production / domain mode)**
   - Public IP + domain DNS `A/AAAA` → server IP
