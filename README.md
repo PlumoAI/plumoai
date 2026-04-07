@@ -220,73 +220,202 @@ This makes PlumoAI not just an AI platform but a **complete operational workspac
 
 ---
 
-## Installation (from Git -- recommended)
+## Production Installation (Docker Compose)
 
-Start from the **installer** after cloning -- **not** from quickstart. Quickstart zip/curl is optional; see [INSTALL.md](INSTALL.md).
+This repo runs PlumoAI as a **multi-container stack** (UI + APIs + AI service + MySQL + MongoDB + Milvus) behind Traefik.
+For production, use **domain mode** (HTTPS with Let's Encrypt). For local evaluation/dev, use **localhost mode**.
 
-### Prerequisites
+### Windows (Production / Localhost)
 
-- Docker Engine and **Docker Compose v2** (Docker Desktop on Windows).
+#### Prerequisites
 
-### 1. Clone
+- Windows 10/11
+- Docker Desktop with **Docker Compose v2**
+- Git
+- **Production (domain mode)**: domain `A/AAAA` record → your server IP, and open inbound **80/443**
+
+#### Step 1: Clone
+
+```powershell
+git clone https://github.com/PlumoAI/plumoai.git
+cd plumoai
+```
+
+#### Step 2: Create `.env`
+
+Create `.env` in the same folder as `docker-compose.yml`.
+
+**Domain mode (recommended for production):**
+
+```ini
+RUN_MODE=domain
+DOMAIN_NAME=self.example.com
+SSL_EMAIL=admin@example.com
+```
+
+**Localhost mode (HTTP):**
+
+```ini
+RUN_MODE=localhost
+LOCALHOST_PORT=7861
+```
+
+#### Step 3: Install / Start
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+#### Step 4: Open
+
+- Domain mode: `https://<your-domain>`
+- Localhost mode: `http://localhost:7861`
+
+#### Optional: Fresh install (resets MySQL volume)
+
+```powershell
+.\install.ps1 -Fresh
+```
+
+#### Verify / Logs
+
+```powershell
+docker compose ps
+docker compose logs --tail 200 -f traefik
+```
+
+---
+
+### Linux (Production / Localhost)
+
+#### Prerequisites
+
+- Docker Engine + **Docker Compose v2 plugin**
+- Git
+- **Production (domain mode)**: domain `A/AAAA` record → your server IP, and open inbound **80/443**
+
+#### Step 1: Clone
 
 ```bash
 git clone https://github.com/PlumoAI/plumoai.git
 cd plumoai
 ```
 
-Run the next steps from the folder that contains `docker-compose.yml`, `install.ps1`, and `install.sh` (if your monorepo keeps the stack in a subfolder, `cd` there).
+#### Step 2: Create `.env`
 
-**Dedicated self-hosted repo (same installer):** [github.com/PlumoAI/PlumoAi-Self-Hosted](https://github.com/PlumoAI/PlumoAi-Self-Hosted)
+Create `.env` in the same folder as `docker-compose.yml`.
 
-### 2. Optional: `.env`
+**Domain mode (recommended for production):**
 
-Create `.env` for domain mode, localhost port, optional AWS variables. Examples in [INSTALL.md](INSTALL.md). If you skip this, the installer prompts when run interactively.
-
-### 3. Run the installer
-
-**Windows (PowerShell):**
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1
+```ini
+RUN_MODE=domain
+DOMAIN_NAME=self.example.com
+SSL_EMAIL=admin@example.com
 ```
 
-**Linux / macOS / WSL / Git Bash:**
+**Localhost mode (HTTP):**
+
+```ini
+RUN_MODE=localhost
+LOCALHOST_PORT=7861
+```
+
+#### Step 3: Install / Start
 
 ```bash
 chmod +x install.sh
 ./install.sh
 ```
 
-### 4. Fresh MySQL reset (optional)
+#### Step 4: Open
 
-```powershell
-.\install.ps1 -Fresh
-```
+- Domain mode: `https://<your-domain>`
+- Localhost mode: `http://localhost:7861`
+
+#### Optional: Fresh install (resets MySQL volume)
 
 ```bash
 ./install.sh --fresh
 ```
 
-### 5. Open the app
-
-| Mode | URL |
-|------|-----|
-| Localhost | `http://localhost:<PORT like 7861 defaut>` (`LOCALHOST_PORT` in `.env`) |
-| Domain | `https://<your-domain>` (Let's Encrypt via Traefik) |
-
-### Alternative: packaged quickstart
-
-[INSTALL.md](INSTALL.md) documents `quickstart.ps1` / `quickstart.sh` for versioned zip downloads.
-
-### Single-image preview (when published)
+#### Verify / Logs
 
 ```bash
-docker pull plumoai/platform
-docker run -p 3000:3000 plumoai/platform
+docker compose ps
+docker compose logs --tail 200 -f traefik
 ```
 
-The **full** product stack runs via the **Git installer** and Compose.
+---
+
+### macOS (Production / Localhost)
+
+#### Prerequisites
+
+- Docker Desktop with **Docker Compose v2**
+- Git
+- **Production (domain mode)**: domain `A/AAAA` record → your server IP, and open inbound **80/443**
+
+#### Step 1: Clone
+
+```bash
+git clone https://github.com/PlumoAI/plumoai.git
+cd plumoai
+```
+
+#### Step 2: Create `.env`
+
+Create `.env` in the same folder as `docker-compose.yml`.
+
+**Domain mode (recommended for production):**
+
+```ini
+RUN_MODE=domain
+DOMAIN_NAME=self.example.com
+SSL_EMAIL=admin@example.com
+```
+
+**Localhost mode (HTTP):**
+
+```ini
+RUN_MODE=localhost
+LOCALHOST_PORT=7861
+```
+
+#### Step 3: Install / Start
+
+```bash
+chmod +x install.sh
+./install.sh
+```
+
+#### Step 4: Open
+
+- Domain mode: `https://<your-domain>`
+- Localhost mode: `http://localhost:7861`
+
+#### Optional: Fresh install (resets MySQL volume)
+
+```bash
+./install.sh --fresh
+```
+
+#### Verify / Logs
+
+```bash
+docker compose ps
+docker compose logs --tail 200 -f traefik
+```
+
+### Common troubleshooting (all platforms)
+
+- **DNS not pointing to the server** (domain mode): `DOMAIN_NAME` must resolve to your server’s public IP.
+- **Ports blocked** (domain mode): open inbound **80/443** (cloud security group + OS firewall). Let’s Encrypt will fail if port 80 is blocked.
+- **Non-interactive installs**: ensure `.env` is fully set (especially `DOMAIN_NAME` and `SSL_EMAIL` for domain mode).
+
+### Optional: Update / change version (all platforms)
+
+1) Set `PLUMOAI_VERSION` in `.env` (or keep the default).  
+2) Re-run the installer for your OS (it will pull the new images and apply changes).
 
 ---
 

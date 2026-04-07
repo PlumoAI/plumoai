@@ -157,12 +157,12 @@ if [ "$needs_prompt" = true ] && [ -t 0 ]; then
 fi
 
 RUN_MODE="${RUN_MODE:-domain}"
-LOCALHOST_PORT="${LOCALHOST_PORT:-80}"
+LOCALHOST_PORT="${LOCALHOST_PORT:-7861}"
 
 # Localhost: always prompt for port when interactive (Enter keeps default)
 if [ "$RUN_MODE" = "localhost" ] && [ -t 0 ]; then
   default_port="$LOCALHOST_PORT"
-  [[ "$default_port" =~ ^[0-9]+$ ]] || default_port=80
+  [[ "$default_port" =~ ^[0-9]+$ ]] || default_port=7861
   read -r -p "Enter port for localhost [$default_port]: " entered_port
   LOCALHOST_PORT="${entered_port:-$default_port}"
   set_env_key LOCALHOST_PORT "$LOCALHOST_PORT"

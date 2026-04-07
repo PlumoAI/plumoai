@@ -1,7 +1,7 @@
 # Override for localhost mode (HTTP on LOCALHOST_PORT)
 # Use: docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
 #
-# Routing (entrypoint web = port 80 → exposed as LOCALHOST_PORT e.g. 7543):
+# Routing (entrypoint web = port 80 → exposed as LOCALHOST_PORT, default 7861):
 #   /api/auth/*    → auth-service:3000 (priority 200; never send /api to main-app)
 #   /api/company/* → api-service:3001 (priority 100)
 #   /*             → main-app (priority 1, fallback for non-API only)
@@ -27,7 +27,7 @@ services:
       # No HTTP→HTTPS redirect for localhost
     # !override replaces (not merges) ports - avoids binding to 80 on Windows
     ports: !override
-      - "0.0.0.0:${LOCALHOST_PORT:-7543}:80"
+      - "0.0.0.0:${LOCALHOST_PORT:-7861}:80"
       - "0.0.0.0:8080:8080"
 
   main-app:

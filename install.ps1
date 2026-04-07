@@ -125,11 +125,11 @@ if ($needsPrompt -and [Environment]::UserInteractive) {
 }
 
 $RUN_MODE = if ([string]::IsNullOrWhiteSpace($RUN_MODE)) { "domain" } else { $RUN_MODE }
-$LOCALHOST_PORT = if ([string]::IsNullOrWhiteSpace($LOCALHOST_PORT)) { "80" } else { $LOCALHOST_PORT }
+$LOCALHOST_PORT = if ([string]::IsNullOrWhiteSpace($LOCALHOST_PORT)) { "7861" } else { $LOCALHOST_PORT }
 
 # In localhost mode, always prompt for port when interactive (Enter keeps current/default).
 if ($RUN_MODE -eq "localhost" -and [Environment]::UserInteractive) {
-    $defaultPort = if ([string]::IsNullOrWhiteSpace($LOCALHOST_PORT) -or $LOCALHOST_PORT -notmatch '^\d+$') { "80" } else { $LOCALHOST_PORT }
+    $defaultPort = if ([string]::IsNullOrWhiteSpace($LOCALHOST_PORT) -or $LOCALHOST_PORT -notmatch '^\d+$') { "7861" } else { $LOCALHOST_PORT }
     $enteredPort = Read-Host "Enter port for localhost [$defaultPort]"
     $LOCALHOST_PORT = if ([string]::IsNullOrWhiteSpace($enteredPort)) { $defaultPort } else { $enteredPort }
     Set-EnvValue $ENV_FILE "LOCALHOST_PORT" $LOCALHOST_PORT
