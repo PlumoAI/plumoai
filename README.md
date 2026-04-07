@@ -243,7 +243,8 @@ cd plumoai
 
 #### Step 2: Create `.env`
 
-Create `.env` in the same folder as `docker-compose.yml`.
+Creating `.env` is **optional**. If it doesn’t exist, the installer will create it from `.env.example` and (when run interactively) prompt you for required values.
+For production or non-interactive installs, it’s recommended to create/edit `.env` yourself.
 
 **Domain mode (recommended for production):**
 
@@ -303,7 +304,8 @@ cd plumoai
 
 #### Step 2: Create `.env`
 
-Create `.env` in the same folder as `docker-compose.yml`.
+Creating `.env` is **optional**. If it doesn’t exist, the installer will create it from `.env.example` and (when run interactively) prompt you for required values.
+For production or non-interactive installs, it’s recommended to create/edit `.env` yourself.
 
 **Domain mode (recommended for production):**
 
@@ -364,7 +366,8 @@ cd plumoai
 
 #### Step 2: Create `.env`
 
-Create `.env` in the same folder as `docker-compose.yml`.
+Creating `.env` is **optional**. If it doesn’t exist, the installer will create it from `.env.example` and (when run interactively) prompt you for required values.
+For production or non-interactive installs, it’s recommended to create/edit `.env` yourself.
 
 **Domain mode (recommended for production):**
 
