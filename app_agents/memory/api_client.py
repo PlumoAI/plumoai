@@ -253,19 +253,18 @@ class MemoryApiClient:
         if not COMPANY_URL:
             return {"memories": [], "total": 0}
 
-        payload: Dict[str, Any] = {
+        url = f"{COMPANY_URL}/aiagentchat/memory/list"
+        params: Dict[str, Any] = {
             "agent_id": self.agent_id,
             "user_id": self._user_id_str(),
             "limit": limit,
             "offset": offset,
         }
         if mem_type:
-            payload["type"] = mem_type
-
-        url = f"{COMPANY_URL}/aiagentchat/memory/list"
+            params["type"] = mem_type
         try:
             async with httpx.AsyncClient(timeout=API_TIMEOUT) as client:
-                resp = await client.post(url, headers=self._headers(), json=payload)
+                resp = await client.get(url, headers=self._headers(), params=params)
             if resp.status_code == 200:
                 body = resp.json()
                 if body.get("type") == "success":
@@ -278,11 +277,11 @@ class MemoryApiClient:
         if not COMPANY_URL:
             return {"memories": [], "total": 0}
 
-        payload: Dict[str, Any] = {"agent_id": self.agent_id, "scope": "shared", "limit": limit, "offset": offset}
         url = f"{COMPANY_URL}/aiagentchat/memory/list"
+        params: Dict[str, Any] = {"agent_id": self.agent_id, "scope": "shared", "limit": limit, "offset": offset}
         try:
             async with httpx.AsyncClient(timeout=API_TIMEOUT) as client:
-                resp = await client.post(url, headers=self._headers(), json=payload)
+                resp = await client.get(url, headers=self._headers(), params=params)
             if resp.status_code == 200:
                 body = resp.json()
                 if body.get("type") == "success":
