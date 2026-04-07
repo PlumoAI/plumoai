@@ -1,0 +1,14 @@
+## Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+## Local environment
+.env
+
+## Generated secrets (created by installers)
+secrets/
+
+## Local storage (default local uploads path)
+storage/
+

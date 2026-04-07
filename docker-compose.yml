@@ -230,7 +230,7 @@ services:
         limits: { memory: 1G }
         reservations: { memory: 256M }
     volumes:
-      - ./app_agents:/opt/plumoai/app_agents:ro
+      - ./ai-agents:/opt/plumoai/app_agents:ro
     environment:
       PLUMOAI_APP_AGENTS_EXTERNAL_DIR: /opt/plumoai/app_agents
       AUTH_URL: ${AUTH_URL:-http://auth:3000}
