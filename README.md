@@ -241,10 +241,10 @@ git clone https://github.com/PlumoAI/plumoai.git
 cd plumoai
 ```
 
-#### Step 2: Create `.env`
+#### Optional Step 2: Configure `.env` (recommended for production)
 
-Creating `.env` is **optional**. If it doesn’t exist, the installer will create it from `.env.example` and (when run interactively) prompt you for required values.
-For production or non-interactive installs, it’s recommended to create/edit `.env` yourself.
+You can skip this step completely. **Step 3 will auto-create `.env`** from `.env.example` and (when run interactively) prompt you for required values.
+For production or non-interactive installs, it’s recommended to create/edit `.env` yourself in advance.
 
 **Domain mode (recommended for production):**
 
@@ -261,7 +261,7 @@ RUN_MODE=localhost
 LOCALHOST_PORT=7861
 ```
 
-#### Step 3: Install / Start
+#### Step 3: Install / Start (auto-creates `.env`, secrets, and starts containers)
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install.ps1
@@ -302,10 +302,10 @@ git clone https://github.com/PlumoAI/plumoai.git
 cd plumoai
 ```
 
-#### Step 2: Create `.env`
+#### Optional Step 2: Configure `.env` (recommended for production)
 
-Creating `.env` is **optional**. If it doesn’t exist, the installer will create it from `.env.example` and (when run interactively) prompt you for required values.
-For production or non-interactive installs, it’s recommended to create/edit `.env` yourself.
+You can skip this step completely. **Step 3 will auto-create `.env`** from `.env.example` and (when run interactively) prompt you for required values.
+For production or non-interactive installs, it’s recommended to create/edit `.env` yourself in advance.
 
 **Domain mode (recommended for production):**
 
@@ -322,7 +322,7 @@ RUN_MODE=localhost
 LOCALHOST_PORT=7861
 ```
 
-#### Step 3: Install / Start
+#### Step 3: Install / Start (auto-creates `.env`, secrets, and starts containers)
 
 ```bash
 chmod +x install.sh
@@ -364,10 +364,10 @@ git clone https://github.com/PlumoAI/plumoai.git
 cd plumoai
 ```
 
-#### Step 2: Create `.env`
+#### Optional Step 2: Configure `.env` (recommended for production)
 
-Creating `.env` is **optional**. If it doesn’t exist, the installer will create it from `.env.example` and (when run interactively) prompt you for required values.
-For production or non-interactive installs, it’s recommended to create/edit `.env` yourself.
+You can skip this step completely. **Step 3 will auto-create `.env`** from `.env.example` and (when run interactively) prompt you for required values.
+For production or non-interactive installs, it’s recommended to create/edit `.env` yourself in advance.
 
 **Domain mode (recommended for production):**
 
@@ -384,7 +384,7 @@ RUN_MODE=localhost
 LOCALHOST_PORT=7861
 ```
 
-#### Step 3: Install / Start
+#### Step 3: Install / Start (auto-creates `.env`, secrets, and starts containers)
 
 ```bash
 chmod +x install.sh
