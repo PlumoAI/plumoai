@@ -11,6 +11,8 @@ services:
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
+    # Client IP: Node APIs use TRUST_PROXY=1 to honor X-Forwarded-For / X-Real-Ip from Traefik.
+    # Production behind CDN/LB: add entrypoint forwardedHeaders.trustedIPs (Traefik: Forwarded headers), not insecure.
     command:
       - "--api.insecure=false"
       - "--providers.docker=true"
@@ -111,6 +113,8 @@ services:
       options: { max-size: "10m", max-file: "3" }
     environment:
       NODE_ENV: production   # enables V8 opts, disables dev middleware, reduces CPU/RAM
+      # One reverse proxy (Traefik) in front → Express/Nest req.ip / forwarded headers
+      TRUST_PROXY: ${TRUST_PROXY:-1}
       DB_HOST: ${DB_HOST:-mysql}
       DB_PORT: ${DB_PORT:-3306}
       # Outbound mail (auth): ses | smtp | disabled (false/0/off/no/none/disabled in app)
@@ -173,6 +177,8 @@ services:
       options: { max-size: "10m", max-file: "3" }
     environment:
       NODE_ENV: production
+      # One reverse proxy (Traefik) in front → Express/Nest req.ip / forwarded headers
+      TRUST_PROXY: ${TRUST_PROXY:-1}
       PORT: ${PORT:-3001}
       DB_HOST: ${DB_HOST:-mysql}
       DB_PORT: ${DB_PORT:-3306}

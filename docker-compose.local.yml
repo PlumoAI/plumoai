@@ -8,6 +8,9 @@
 #
 # Traefik starts with the stack and listens on LOCALHOST_PORT immediately.
 # If /api/auth returns 404 on first request, wait ~30s for auth/company to register and retry.
+#
+# Lab: forwardedHeaders.insecure lets Traefik trust X-Forwarded-* from clients (OK for localhost).
+# Production: use forwardedHeaders.trustedIPs for your real LB/CDN only (see main docker-compose Traefik comment).
 
 services:
   traefik:
@@ -20,6 +23,8 @@ services:
       - "--serversTransport.forwardingTimeouts.responseHeaderTimeout=60s"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.forwardedheaders.insecure=true"
+      - "--entrypoints.websecure.forwardedheaders.insecure=true"
       # Define cert resolver so production routers (main/auth/api) don't error; localhost uses web (HTTP)
       - "--certificatesresolvers.mytlschallenge.acme.tlschallenge=true"
       - "--certificatesresolvers.mytlschallenge.acme.email=not-used@localhost"
