@@ -7,7 +7,7 @@ Web Search Agent Tool (app_code: websearch)
 
 Built-in tool that performs web searches when modelConfig.enableWebSearching is true.
 Uses the connected LLM provider (same as the main agent) - no 3rd party search API.
-When enable_web_search is true, the provider (e.g. OpenRouter) uses its web plugin
+When enable_web_search is true, the provider (e.g. OpenRouter) uses its web tool
 so the model can search the web during generation.
 """
 

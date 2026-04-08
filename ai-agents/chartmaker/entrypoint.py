@@ -16,8 +16,8 @@ async def create_tool_agent(
     agent_id: Optional[str] = None,
 ):
     """
-    Plugin entrypoint for the chartmaker tool.
-    Loads ChartMakerAgentTool from this plugin folder (self-contained plugin).
+    Tool entrypoint for the chartmaker AI Agent tool.
+    Loads ChartMakerAgentTool from this tool folder (self-contained tool).
     """
     agent_instructions = (app_config or {}).get("custom_description") or (app_config or {}).get(
         "agent_instructions"

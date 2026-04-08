@@ -203,6 +203,12 @@ etc.
 
 A single AI Employee (Just like human) can use **multiple AI Agents simultaneously**.
 
+### Build or update an AI Agent tool
+
+AI Agent tools live in `ai-agents/` in this repo and are mounted into the `ai-service` container at runtime.
+
+- Guide: [AI Agent Tool Creation Guide](AI_AGENT_PLUGIN_CREATION_GUIDE.md)
+
 ---
 
 # 🗂 Built In Project Management Workspace
@@ -305,7 +311,7 @@ docker compose logs --tail 200 -f traefik
 
 #### Prerequisites
 
-- Docker Engine + **Docker Compose v2 plugin**
+- Docker Engine + **Docker Compose v2**
 - Git
 - **Production (domain mode)**: domain `A/AAAA` record → your server IP, and open inbound **80/443**
 

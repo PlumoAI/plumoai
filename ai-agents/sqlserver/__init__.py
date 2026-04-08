@@ -1,4 +1,4 @@
 """
-SQL Server tool plugin package.
+SQL Server AI Agent tool package.
 """
 

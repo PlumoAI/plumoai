@@ -31,7 +31,7 @@ for arg in "$@"; do
 done
 
 # --- compose shim (docker compose vs docker-compose) ---
-# Some hosts ship Docker Engine without the Compose v2 plugin; others only have the legacy docker-compose binary.
+# Some hosts ship Docker Engine without Docker Compose v2; others only have the legacy docker-compose binary.
 # We prefer `docker compose` when available, then fall back to `docker-compose`.
 COMPOSE_BIN=""
 if docker compose version >/dev/null 2>&1; then
@@ -40,7 +40,7 @@ elif command -v docker-compose >/dev/null 2>&1; then
   COMPOSE_BIN="docker-compose"
 else
   echo "Error: Docker Compose not found." >&2
-  echo "Install the Compose plugin (recommended) or docker-compose binary, then retry." >&2
+  echo "Install Docker Compose v2 (recommended) or the docker-compose binary, then retry." >&2
   exit 1
 fi
 

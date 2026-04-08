@@ -1,4 +1,4 @@
 """
-Gmail tool plugin package.
+Gmail AI Agent tool package.
 """
 

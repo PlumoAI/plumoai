@@ -16,8 +16,8 @@ async def create_tool_agent(
     agent_id: Optional[str] = None,
 ):
     """
-    Plugin entrypoint for the knowledgebase tool.
-    Loads KnowledgebaseSearchTool from this plugin folder (self-contained plugin).
+    Tool entrypoint for the knowledgebase AI Agent tool.
+    Loads KnowledgebaseSearchTool from this tool folder (self-contained tool).
     """
     kb_agent = KnowledgebaseSearchTool(
         token=token,

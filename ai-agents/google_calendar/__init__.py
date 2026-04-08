@@ -1,4 +1,4 @@
 """
-Google Calendar tool plugin package.
+Google Calendar AI Agent tool package.
 """
 

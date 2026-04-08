@@ -1,4 +1,4 @@
 """
-Knowledgebase tool plugin package.
+Knowledgebase AI Agent tool package.
 """
 

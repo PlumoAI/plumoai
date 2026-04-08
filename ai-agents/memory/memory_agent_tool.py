@@ -5,7 +5,7 @@ Autonomous Memory Agent Tool (app_code: memory)
 
 Refactored implementation: this file keeps the public tool surface
 (`MemoryAgentTool`) while delegating responsibilities to modules in this
-plugin package (API client, JSON utils, scoring, tagging, etc.).
+tool package (API client, JSON utils, scoring, tagging, etc.).
 """
 
 import json

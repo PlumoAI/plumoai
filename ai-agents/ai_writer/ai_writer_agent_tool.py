@@ -3,7 +3,7 @@ from __future__ import annotations
 """
 AI Writer Agent (app_code: ai_writer)
 
-Full implementation lives in this plugin folder so the ai_writer tool
+Full implementation lives in this tool folder so the ai_writer tool
 is completely self-contained. The legacy module llm_tools.ai_writer_agent_tool
 simply re-exports this AIWriterAgentTool class.
 """

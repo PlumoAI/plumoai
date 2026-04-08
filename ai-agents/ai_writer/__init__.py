@@ -1,4 +1,4 @@
 """
-AI Writer tool plugin package.
+AI Writer AI Agent tool package.
 """
 

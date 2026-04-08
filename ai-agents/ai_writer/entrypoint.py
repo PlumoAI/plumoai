@@ -16,8 +16,8 @@ async def create_tool_agent(
     agent_id: Optional[str] = None,
 ):
     """
-    Plugin entrypoint for the AI Writer tool.
-    Loads AIWriterAgentTool from this plugin folder (self-contained plugin),
+    Tool entrypoint for the AI Writer AI Agent tool.
+    Loads AIWriterAgentTool from this tool folder (self-contained tool),
     without depending on legacy llm_tools paths.
     """
     agent = AIWriterAgentTool(

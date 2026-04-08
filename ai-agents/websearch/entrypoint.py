@@ -16,8 +16,8 @@ async def create_tool_agent(
     agent_id: Optional[str] = None,
 ):
     """
-    Plugin entrypoint for the websearch tool.
-    Loads WebSearchAgentTool from this plugin folder (self-contained plugin).
+    Tool entrypoint for the websearch AI Agent tool.
+    Loads WebSearchAgentTool from this tool folder (self-contained tool).
     """
     agent = WebSearchAgentTool(
         llm_provider=llm_provider,

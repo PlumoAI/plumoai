@@ -156,12 +156,12 @@ DO NOT USE THIS TOOL WHEN:
         Stub implementation to satisfy the BaseToolAgent contract.
 
         The full chart generation pipeline has not yet been fully migrated into this
-        plugin module. Until that work is complete, this tool will report that it is
+        tool module. Until that work is complete, this tool will report that it is
         disabled instead of silently doing nothing or partially working.
         """
         err = {
             "success": False,
-            "error": "ChartMakerAgentTool.run is not yet fully implemented in plugin form",
+            "error": "ChartMakerAgentTool.run is not yet fully implemented in tool form",
         }
         yield event(AgentEvent.ERROR, err)
         yield event(AgentEvent.FINAL, err)
