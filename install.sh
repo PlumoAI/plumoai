@@ -265,6 +265,11 @@ storage_backend_needs_prompt() {
   [[ -z "$v" || "$v" == *"<"* ]]
 }
 
+openai_kb_key_needs_prompt() {
+  local v="$1"
+  [[ -z "$v" || "$v" == *"<"* ]]
+}
+
 normalize_storage_backend() {
   local v
   v="$(echo "${1:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
@@ -277,6 +282,20 @@ normalize_storage_backend() {
 STORAGE_BACKEND=$(get_env_value STORAGE_BACKEND)
 LOCAL_STORAGE_HOST_PATH=$(get_env_value LOCAL_STORAGE_HOST_PATH)
 LOCAL_STORAGE_CONTAINER_PATH=$(get_env_value LOCAL_STORAGE_CONTAINER_PATH)
+OPENAI_API_KEY_KNOWLEDGEBASE=$(get_env_value OPENAI_API_KEY_KNOWLEDGEBASE)
+
+# Optional: OpenAI key for knowledgebase embeddings (company/api service)
+if openai_kb_key_needs_prompt "$OPENAI_API_KEY_KNOWLEDGEBASE" && [ -t 0 ]; then
+  echo ""
+  echo "Optional: Knowledgebase embeddings (company service)"
+  echo "  Provide an OpenAI API key to generate embeddings for knowledgebase content."
+  echo "  Press Enter to skip."
+  read -r -p "OPENAI_API_KEY_KNOWLEDGEBASE: " kb_key
+  if [[ -n "${kb_key:-}" ]]; then
+    set_env_key OPENAI_API_KEY_KNOWLEDGEBASE "$kb_key"
+    OPENAI_API_KEY_KNOWLEDGEBASE=$(get_env_value OPENAI_API_KEY_KNOWLEDGEBASE)
+  fi
+fi
 
 if [ -t 0 ] && storage_backend_needs_prompt "$STORAGE_BACKEND"; then
   echo ""

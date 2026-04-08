@@ -181,6 +181,8 @@ services:
       Auth_URL: ${Auth_URL:-http://auth:3000}
       PLUMOAI_DIGITAL_EMPLOYEE_API_URL: ${PLUMOAI_DIGITAL_EMPLOYEE_API_URL:-http://ai:3002}
       MILVUS_URL: "http://milvus-standalone:19530"
+      # OpenAI key used by the company/api service for knowledgebase embeddings (optional)
+      OPENAI_API_KEY_KNOWLEDGEBASE: ${OPENAI_API_KEY_KNOWLEDGEBASE:-}
       STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
       # IMPORTANT: inside-container path must be Linux-style (Windows host paths break bind mount syntax)
       LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_CONTAINER_PATH:-/data/plumoai/storage}

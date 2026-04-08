@@ -228,6 +228,18 @@ function Test-StorageBackendNeedsPrompt {
     return [string]::IsNullOrWhiteSpace($Val) -or ($Val -like "*<*")
 }
 
+$OPENAI_API_KEY_KNOWLEDGEBASE = Get-EnvValue $ENV_FILE "OPENAI_API_KEY_KNOWLEDGEBASE"
+if ([Environment]::UserInteractive -and (Test-Placeholder $OPENAI_API_KEY_KNOWLEDGEBASE)) {
+    Write-Host ""
+    Write-Host "Optional: Knowledgebase embeddings (company service)"
+    Write-Host "  Provide an OpenAI API key to generate embeddings for knowledgebase content."
+    Write-Host "  Press Enter to skip."
+    $kb = Read-Host "OPENAI_API_KEY_KNOWLEDGEBASE"
+    if (![string]::IsNullOrWhiteSpace($kb)) {
+        Set-EnvValue $ENV_FILE "OPENAI_API_KEY_KNOWLEDGEBASE" $kb
+    }
+}
+
 $STORAGE_BACKEND = Get-EnvValue $ENV_FILE "STORAGE_BACKEND"
 $LOCAL_STORAGE_HOST_PATH = Get-EnvValue $ENV_FILE "LOCAL_STORAGE_HOST_PATH"
 $LOCAL_STORAGE_CONTAINER_PATH = Get-EnvValue $ENV_FILE "LOCAL_STORAGE_CONTAINER_PATH"
