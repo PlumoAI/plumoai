@@ -1,4 +1,4 @@
 """
-Web Search AI Agent tool package.
+Web Search tool plugin package.
 """
 
