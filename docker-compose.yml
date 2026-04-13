@@ -111,7 +111,10 @@ services:
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
+    volumes:
+      - ./service-providers:/opt/plumoai/service-providers:ro
     environment:
+      SERVICE_PROVIDERS_LOCAL_PATH: /opt/plumoai/service-providers
       NODE_ENV: production   # enables V8 opts, disables dev middleware, reduces CPU/RAM
       # One reverse proxy (Traefik) in front → Express/Nest req.ip / forwarded headers
       TRUST_PROXY: ${TRUST_PROXY:-1}
@@ -175,7 +178,12 @@ services:
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
+    volumes:
+      - ./ai-agents:/opt/plumoai/ai-agents:ro
+      - ./storage:/opt/plumoai/storage:ro
     environment:
+      PLUMOAI_AI_AGENTS_APPS_PATH: /opt/plumoai/ai-agents
+      LOCAL_STORAGE_PATH: /opt/plumoai/storage
       NODE_ENV: production
       # One reverse proxy (Traefik) in front → Express/Nest req.ip / forwarded headers
       TRUST_PROXY: ${TRUST_PROXY:-1}
@@ -190,15 +198,10 @@ services:
       # OpenAI key used by the company/api service for knowledgebase embeddings (optional)
       OPENAI_API_KEY_KNOWLEDGEBASE: ${OPENAI_API_KEY_KNOWLEDGEBASE:-}
       STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
-      # IMPORTANT: inside-container path must be Linux-style (Windows host paths break bind mount syntax)
-      LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_CONTAINER_PATH:-/data/plumoai/storage}
       AWS_S3_BUCKET:  ${AWS_S3_BUCKET}
       AWS_REGION: ${AWS_REGION}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-    volumes:
-      # Host path can be Windows (e.g. D:\...\storage). Container path must be POSIX.
-      - ${LOCAL_STORAGE_HOST_PATH:-./storage}:${LOCAL_STORAGE_CONTAINER_PATH:-/data/plumoai/storage}
     secrets:
       - mysql_db
       - mysql_user
