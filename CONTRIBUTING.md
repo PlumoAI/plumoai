@@ -67,7 +67,7 @@ A single AI Employee can use **multiple AI Agents simultaneously**.
 
 ## 🚀 Share Use Cases
 
-Real examples help others understand how powerful AI Employees can be.
+Real-world examples help others discover the full potential of AI Employees.
 
 Examples you can share:
 
