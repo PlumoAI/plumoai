@@ -5,7 +5,7 @@ Autonomous Memory Agent Tool (app_code: memory)
 
 Refactored implementation: this file keeps the public tool surface
 (`MemoryAgentTool`) while delegating responsibilities to modules in this
-tool package (API client, JSON utils, scoring, tagging, etc.).
+plugin package (API client, JSON utils, scoring, tagging, etc.).
 """
 
 import json
@@ -14,7 +14,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Set
 
-from backend.services.app_agents.base_tool_agent import BaseToolAgent
+from backend.services.ai_agents.base_tool_agent import BaseToolAgent
 
 from .api_client import MemoryApiClient
 from .constants import (

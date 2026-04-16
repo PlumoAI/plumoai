@@ -1,0 +1,16 @@
+{
+  "name": "Notion",
+  "code": "notion",
+  "auth_type": "oauth2",
+  "required_fields": [],
+  "config": {
+    "authorization_endpoint": "https://mcp.notion.com/authorize",
+    "resource": "https://mcp.notion.com/",
+    "token_endpoint": "https://mcp.notion.com/token",
+    "grantTypes": ["authorization_code", "refresh_token"],
+    "registration_endpoint": "https://mcp.notion.com/register",
+    "isClientRegistrationRequired": true
+  },
+  "is_active": true
+}
+

@@ -1,4 +1,4 @@
 """
-Calculator & DateTime AI Agent tool package.
+Calculator & DateTime tool plugin package.
 """
 

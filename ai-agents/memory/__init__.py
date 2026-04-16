@@ -1,4 +1,4 @@
 """
-Memory AI Agent tool package.
+Memory tool plugin package.
 """
 

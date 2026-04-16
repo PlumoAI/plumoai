@@ -29,6 +29,7 @@ Autonomy pipeline (all internal — caller only passes a natural-language query)
 import os
 import json
 import re
+import math
 import logging
 import asyncio
 import hashlib
@@ -44,9 +45,12 @@ COMPANY_URL = os.getenv("COMPANY_URL")
 # ── Thresholds ────────────────────────────────────────────────────────────── #
 QUALITY_THRESHOLD   = 38.0
 MIN_RESULT_COUNT    = 2
-RERANK_SEMANTIC_W   = 0.65
-RERANK_KEYWORD_W    = 0.25
-RERANK_PAGE_W       = 0.10   # small bonus for chunks near page 1 (title area)
+RERANK_SEMANTIC_W   = 0.60   # reduced slightly to make room for heading signal
+RERANK_HEADING_W    = 0.15   # NEW: dedicated heading-alignment weight
+RERANK_KEYWORD_W    = 0.18   # body-text + keyword overlap
+RERANK_PAGE_W       = 0.07   # small bonus for chunks near page 1 (title area)
+
+COHESION_BOOST      = 8.0    # additive score for chunks co-located with top anchor group
 
 # ── Context expansion thresholds ─────────────────────────────────────────── #
 ANCHOR_THRESHOLD_HIGH   = 55.0   # relevance ≥ 55% → window=2 (±2 neighbors)
@@ -54,6 +58,41 @@ ANCHOR_THRESHOLD_MEDIUM = 38.0   # relevance ≥ 38% → window=1 (±1 neighbor)
 ANCHOR_MAX              = 3      # max anchors to expand (focus on top signals)
 CONTEXT_TOKEN_BUDGET    = 3000   # estimated tokens for final LLM context
 CONTEXT_CHARS_PER_TOKEN = 4      # rough estimate: 4 chars ≈ 1 token
+
+# ── Fix 1: Hard pipeline caps (prevent runaway adaptive loops) ────────────── #
+MAX_TOTAL_SEARCHES  = 6    # total _execute_search calls allowed per run()
+MAX_EXPANSIONS      = 2    # max anchor expansions (structural + semantic + etc.)
+MAX_GROUPS          = 5    # max context groups kept after ranking
+
+# ── Fix 2: Retrieval source weights (signal normalization) ───────────────── #
+# Each retrieval path has different precision. Weights scale the relevance_score
+# contribution so high-noise sources (gap, keyword) don't override strong
+# primary vector hits. Applied in _rerank before blending.
+_SOURCE_WEIGHTS: Dict[str, float] = {
+    "vector":       1.00,  # primary Milvus semantic search — most reliable
+    "semantic":     0.85,  # anchor-text re-search within same doc
+    "related":      0.80,  # pre-computed cosine cross-links (index time)
+    "section":      0.75,  # same-heading chunks — metadata match, not semantic
+    "structural":   0.70,  # positional ±window — proximity, not relevance
+    "keyword":      0.65,  # exact term match — high precision, low recall
+    "gap":          0.60,  # gap-fill sub-queries — exploratory, least certain
+    "section_node": 0.80,  # expanded from virtual section centroid
+}
+
+def _sigmoid_normalize(score: float, midpoint: float = 50.0, scale: float = 0.08) -> float:
+    """
+    Map a 0-100 relevance score to 0-1 via sigmoid centred at `midpoint`.
+    Compresses extreme outliers and gives a smooth gradient near the decision boundary.
+    Used to normalise scores BEFORE source-weight blending so a raw 95 from a
+    noisy source doesn't swamp a solid 70 from the primary vector path.
+    """
+    return 1.0 / (1.0 + math.exp(-scale * (score - midpoint)))
+
+# ── Fix 3: Anchor-topic divergence threshold ─────────────────────────────── #
+# Anchors with Jaccard word-overlap below this threshold are treated as
+# covering DIFFERENT topics → kept in separate expansion groups so
+# unrelated neighbors are never stitched together.
+ANCHOR_DIVERGE_THRESHOLD = 0.40
 
 _STOP_WORDS: Set[str] = {
     "a","an","the","is","are","was","were","be","been","being","have","has","had",
@@ -132,8 +171,6 @@ def _auto_detect_depth(query: str) -> str:
         return "deep"
     if query.count("?") > 1:
         return "deep"
-    if len(query.split()) >= 20:
-        return "deep"
     return "normal"
 
 
@@ -178,36 +215,83 @@ def _assess_quality(chunks: List[Dict]) -> Tuple[bool, float, float]:
     return sufficient, max_rel, confidence
 
 
-# ── Re-ranking (semantic + keyword + page proximity) ─────────────────────── #
+# ── Re-ranking (semantic + heading alignment + keyword + page + cohesion) ─── #
 def _rerank(chunks: List[Dict], query: str) -> List[Dict]:
+    """
+    Blended re-scoring with four independent signals:
+
+      1. Semantic (Milvus cosine distance)   — weight RERANK_SEMANTIC_W
+      2. Heading alignment                   — weight RERANK_HEADING_W
+         Separate from body-text overlap so that a chunk whose *heading*
+         matches the query is boosted even when its body is dense/technical.
+         Especially effective for policies, reports, and manuals where users
+         navigate by section title ("what is the refund policy?").
+      3. Body-text + keyword overlap          — weight RERANK_KEYWORD_W
+      4. Page proximity (title/intro bias)    — weight RERANK_PAGE_W
+
+    Additive bonuses (applied after blended score):
+      • Neighbor chunks:  ×1.15 multiplicative (preserves context near anchors)
+      • Cohesion group:   +COHESION_BOOST  (rewards chunks co-located with
+                           the top anchor's section — keeps logical units together)
+    """
     query_words = set(re.findall(r"\w+", query.lower())) - _STOP_WORDS
     if not query_words:
         return chunks
 
+    # ── Identify dominant cohesion group from top-3 highest-relevance chunks ─ #
+    top3 = sorted(chunks, key=lambda c: c.get("relevance_score", 0), reverse=True)[:3]
+    dominant_groups: Set[str] = {
+        c["cohesion_group"] for c in top3
+        if c.get("cohesion_group")
+    }
+
     scored: List[Tuple[float, Dict]] = []
     for chunk in chunks:
+        heading  = (chunk.get("heading")    or "").lower()
         text     = (chunk.get("chunk_text") or "").lower()
-        heading  = (chunk.get("heading") or "").lower()
-        keywords = (chunk.get("keywords") or "").lower()
-        combined = set(re.findall(r"\w+", f"{text} {heading} {keywords}"))
-        overlap  = len(query_words & combined) / max(len(query_words), 1)
+        keywords = (chunk.get("keywords")   or "").lower()
 
-        # Slight proximity bonus: chunks from early pages (title/intro) get a boost
-        page = chunk.get("page_number") or chunk.get("page") or 0
+        # ── Fix 2: source-aware semantic score ──────────────────────── #
+        # Normalise raw relevance via sigmoid then apply per-source weight.
+        # Prevents a noisy gap-fill chunk (score=85) from outranking a
+        # solid primary-vector chunk (score=72) purely on raw number.
+        source       = chunk.get("_expand_type") or "vector"
+        src_weight   = _SOURCE_WEIGHTS.get(source, 1.0)
+        norm_score   = _sigmoid_normalize(chunk.get("relevance_score", 0.0)) * 100.0
+        weighted_sem = norm_score * src_weight
+
+        # ── Signal 2: heading alignment ─────────────────────────────── #
+        heading_words   = set(re.findall(r"\w+", heading)) - _STOP_WORDS
+        heading_overlap = (
+            len(query_words & heading_words) / max(len(query_words), 1)
+            if heading_words else 0.0
+        )
+
+        # ── Signal 3: body-text + keyword overlap ───────────────────── #
+        body_combined = set(re.findall(r"\w+", f"{text} {keywords}"))
+        body_overlap  = len(query_words & body_combined) / max(len(query_words), 1)
+
+        # ── Signal 4: page proximity ─────────────────────────────────── #
+        page       = chunk.get("page_number") or chunk.get("page") or 0
         page_bonus = max(0.0, 1.0 - (page / 50.0)) if page else 0.5
 
         blended = (
-            chunk.get("relevance_score", 0.0) * RERANK_SEMANTIC_W
-            + overlap * 100.0              * RERANK_KEYWORD_W
-            + page_bonus * 100.0           * RERANK_PAGE_W
+            weighted_sem                       * RERANK_SEMANTIC_W
+            + heading_overlap * 100.0          * RERANK_HEADING_W
+            + body_overlap    * 100.0          * RERANK_KEYWORD_W
+            + page_bonus      * 100.0          * RERANK_PAGE_W
         )
 
-        # Neighbor chunks get a multiplicative boost so they are not pruned
-        # before stitching merges them with their anchor.
-        # 15% multiplicative is stronger than flat +5 and scales with chunk
-        # quality — a mediocre neighbor of a strong anchor stays ranked near it.
+        # ── Additive bonus: neighbor proximity ──────────────────────── #
         if chunk.get("_is_neighbor"):
             blended *= 1.15
+
+        # ── Additive bonus: cohesion group ───────────────────────────── #
+        # Reward chunks that belong to the same logical section as the
+        # top anchor — keeps "Steps 1-5" together even if step 4 scores
+        # slightly lower than an unrelated high-similarity chunk.
+        if chunk.get("cohesion_group") and chunk.get("cohesion_group") in dominant_groups:
+            blended += COHESION_BOOST
 
         scored.append((blended, chunk))
 
@@ -231,6 +315,26 @@ def _anchor_too_similar(candidate: Dict, existing: List[Dict], threshold: float 
         if union > 0 and (len(cand_words & a_words) / union) >= threshold:
             return True
     return False
+
+
+def _anchors_diverge(a1: Dict, a2: Dict, threshold: float = ANCHOR_DIVERGE_THRESHOLD) -> bool:
+    """
+    Return True when two anchors cover clearly DIFFERENT topics.
+
+    Uses Jaccard word-overlap on chunk text (stop words removed).
+    Low overlap (< threshold) = different topic → must NOT be mixed into
+    the same context group, because expanding one anchor's neighbors into
+    the other's group introduces irrelevant noise.
+
+    Threshold = 0.40: two chunks need to share at least 40% of their
+    meaningful words to be considered the same topic.
+    """
+    words1 = set(re.findall(r"\w+", (a1.get("chunk_text") or "").lower())) - _STOP_WORDS
+    words2 = set(re.findall(r"\w+", (a2.get("chunk_text") or "").lower())) - _STOP_WORDS
+    if not words1 or not words2:
+        return False
+    union = len(words1 | words2)
+    return union > 0 and (len(words1 & words2) / union) < threshold
 
 
 def _select_anchors(chunks: List[Dict]) -> List[Dict]:
@@ -366,32 +470,81 @@ def _rank_groups(groups: List[Dict], query: str) -> List[Dict]:
     """
     Score each anchor-centric context group by the quality of its stitched content.
 
-    Score = 60% anchor relevance + 30% query-word coverage + 10% section breadth.
-    Groups are returned sorted highest-score first.
+    Formula (all signals normalised to 0–100 before weighting):
 
-    Coverage measures how many unique query words appear across all stitched text
-    in the group — a proxy for "does this group actually answer the question?"
-    Breadth counts distinct headings — rewards groups that span multiple sections.
+      score = 0.50 × anchor_score
+            + 0.25 × coverage        — fraction of query words found in group text
+            + 0.15 × diversity        — cross-document + cross-section spread
+            + 0.10 × confidence       — mean relevance of ALL chunks (not just anchor)
+
+    Why each weight:
+      anchor  (0.50) — the primary retrieval signal; anchor quality sets the ceiling.
+      coverage(0.25) — directly measures "does this group answer the question?"
+      diversity(0.15)— punishes echo-chamber groups (single doc × single section);
+                        rewards groups that synthesise multiple perspectives.
+      confidence(0.10)— mean chunk score; prevents a high-anchor group with many
+                         low-quality filler chunks from beating a tight, solid group.
+
+    Diversity is computed as the blend of:
+      • document diversity: unique doc IDs ÷ 3  (capped at 1.0)
+      • section  diversity: unique headings  ÷ 5  (capped at 1.0)
+    A single-doc, single-section group scores 0 on diversity.
+    A group spanning 2+ docs and 3+ sections scores close to 1.0.
     """
     query_words = set(re.findall(r"\w+", query.lower())) - _STOP_WORDS
     scored: List[Tuple[float, Dict]] = []
+
     for group in groups:
         stitched = group.get("stitched_chunks") or []
         if not stitched:
             continue
-        anchor_score  = group["anchor"].get("relevance_score", 0.0)
-        combined_text = " ".join(c.get("chunk_text") or "" for c in stitched).lower()
+
+        # ── Signal 1: anchor quality (0–100) ─────────────────────────── #
+        anchor_score = group["anchor"].get("relevance_score", 0.0)
+
+        # ── Signal 2: query-word coverage (0–1 → ×100) ───────────────── #
+        combined_text  = " ".join(c.get("chunk_text") or "" for c in stitched).lower()
         combined_words = set(re.findall(r"\w+", combined_text))
-        coverage  = len(query_words & combined_words) / max(len(query_words), 1)
-        headings  = {c.get("heading") for c in stitched if c.get("heading")}
-        breadth   = min(len(headings) * 2.0, 10.0)          # cap at 10
+        coverage = len(query_words & combined_words) / max(len(query_words), 1)
+
+        # ── Signal 3: diversity (0–1 → ×100) ─────────────────────────── #
+        # Document diversity: how many distinct source documents contribute.
+        # Capped at 3 docs = full doc-diversity score (diminishing returns beyond).
+        unique_docs = len({
+            c.get("document_id") for c in stitched
+            if c.get("document_id") is not None
+        })
+        doc_diversity = min((unique_docs - 1) / 2.0, 1.0) if unique_docs > 1 else 0.0
+
+        # Section diversity: how many distinct headings are represented.
+        # Capped at 5 headings = full section-diversity score.
+        unique_headings = len({c.get("heading") for c in stitched if c.get("heading")})
+        sec_diversity = min(unique_headings / 5.0, 1.0)
+
+        # Blend: doc diversity weighted slightly higher (cross-doc = stronger signal)
+        diversity = 0.6 * doc_diversity + 0.4 * sec_diversity
+
+        # ── Signal 4: mean chunk confidence (0–1 → ×100) ─────────────── #
+        # Measures whether the group's non-anchor chunks are also strong,
+        # not just the anchor. Penalises groups that padded with weak neighbors.
+        all_scores = [c.get("relevance_score", 0.0) for c in stitched]
+        confidence = (sum(all_scores) / len(all_scores) / 100.0) if all_scores else 0.0
+
+        # ── Composite score ───────────────────────────────────────────── #
         group_score = (
-            anchor_score   * 0.60
-            + coverage     * 100.0 * 0.30
-            + breadth      * 0.10  * 10.0   # 0–10 → 0–1 → ×10 weight
+            anchor_score     * 0.50
+            + coverage       * 100.0 * 0.25
+            + diversity      * 100.0 * 0.15
+            + confidence     * 100.0 * 0.10
         )
-        group["group_score"] = round(group_score, 2)
+
+        group["group_score"]    = round(group_score,  2)
+        group["_coverage"]      = round(coverage,     3)
+        group["_diversity"]     = round(diversity,    3)
+        group["_confidence"]    = round(confidence,   3)
+
         scored.append((group_score, group))
+
     scored.sort(key=lambda x: x[0], reverse=True)
     return [g for _, g in scored]
 
@@ -493,6 +646,7 @@ class KnowledgebaseSearchTool(BaseToolAgent):
         self.is_employee_enabled = is_employee_enabled
 
         self._search_cache: Dict[str, List[Dict]] = {}
+        self._search_count: int = 0   # Fix 1: tracks _execute_search calls per run()
 
         logger.info("📚 Knowledgebase Search Tool initialised")
         logger.info(f"   Company KB : {len(self.company_sources)} source(s) (enabled={is_company_enabled})")
@@ -883,6 +1037,9 @@ class KnowledgebaseSearchTool(BaseToolAgent):
         max_results: int = 10,
         search_depth: str = "normal",
     ) -> AsyncGenerator[Dict, None]:
+        # ── Fix 1: reset search budget for this run ─────────────────── #
+        self._search_count = 0
+
         # ── 1. Auto-detect depth ─────────────────────────────────────── #
         detected_depth = _auto_detect_depth(query)
         if detected_depth == "deep" and search_depth == "normal":
@@ -993,13 +1150,37 @@ class KnowledgebaseSearchTool(BaseToolAgent):
             "query_doc_type": query_doc_type,
         })
 
-        # ── A: initial search ────────────────────────────────────────── #
+        # ── A: initial search + keyword expansion (parallel) ────────── #
+        # Both paths run concurrently — vector search for semantic match,
+        # keyword lookup for exact/rare-term match. Results are merged so
+        # domain-specific terms (ingredient names, policy codes, etc.) are
+        # reliably found even when embeddings under-weight them.
         try:
             if search_depth == "deep":
-                chunks = await self._deep_fetch(query, document_ids, max_results, query_doc_type)
+                vector_task   = self._deep_fetch(query, document_ids, max_results, query_doc_type)
+                keyword_task  = self._keyword_expansion(query, document_ids)
+                vector_result, keyword_result = await asyncio.gather(
+                    vector_task, keyword_task, return_exceptions=True
+                )
+                chunks = vector_result if not isinstance(vector_result, Exception) else []
+                kw_chunks = keyword_result if not isinstance(keyword_result, Exception) else []
             else:
-                raw    = await self._execute_search(query, document_ids, max_results, query_doc_type)
-                chunks = [self._format_chunk(c) for c in (raw or [])]
+                vector_task  = self._execute_search(query, document_ids, max_results, query_doc_type)
+                keyword_task = self._keyword_expansion(query, document_ids)
+                raw_result, keyword_result = await asyncio.gather(
+                    vector_task, keyword_task, return_exceptions=True
+                )
+                raw       = raw_result if not isinstance(raw_result, Exception) else []
+                chunks    = [self._format_chunk(c) for c in (raw or [])]
+                kw_chunks = keyword_result if not isinstance(keyword_result, Exception) else []
+
+            if kw_chunks:
+                before = len(chunks)
+                chunks = self._merge(chunks, kw_chunks)
+                if len(chunks) > before:
+                    logger.info(
+                        f"🔑 Keyword expansion added {len(chunks) - before} new chunk(s)"
+                    )
         except Exception as e:
             yield event(AgentEvent.ERROR, f"Search failed: {e}")
             return
@@ -1020,7 +1201,8 @@ class KnowledgebaseSearchTool(BaseToolAgent):
         logger.info(f"📊 Initial — max_rel={max_rel:.1f}% confidence={confidence} sufficient={sufficient}")
 
         # ── B: auto-escalate normal→deep ─────────────────────────────── #
-        if not sufficient and search_depth == "normal":
+        # Checkpoint: only escalate when budget allows (≥2 searches remaining)
+        if not sufficient and search_depth == "normal" and self._search_count < MAX_TOTAL_SEARCHES - 1:
             escalated = True
             yield event(AgentEvent.THOUGHT,
                 f"Normal search quality low ({max_rel:.0f}%) — escalating to deep")
@@ -1030,9 +1212,12 @@ class KnowledgebaseSearchTool(BaseToolAgent):
             except Exception as e:
                 logger.warning(f"Auto-escalation failed: {e}")
             sufficient, max_rel, confidence = _assess_quality(chunks)
+        elif not sufficient and self._search_count >= MAX_TOTAL_SEARCHES - 1:
+            logger.info("⚡ Skipping escalation — search budget near limit")
 
         # ── C: reformulate if still poor ─────────────────────────────── #
-        if not sufficient:
+        # Checkpoint: only reformulate when budget allows (≥1 search remaining)
+        if not sufficient and self._search_count < MAX_TOTAL_SEARCHES:
             reformulated = True
             yield event(AgentEvent.THOUGHT,
                 f"Results still poor ({max_rel:.0f}%) — reformulating query")
@@ -1046,11 +1231,12 @@ class KnowledgebaseSearchTool(BaseToolAgent):
                     if isinstance(r, Exception) or r is None: continue
                     chunks = self._merge(chunks, [self._format_chunk(c) for c in r])
             sufficient, max_rel, confidence = _assess_quality(chunks)
+        elif not sufficient:
+            logger.info("⚡ Skipping reformulation — search budget exhausted")
 
         # ── D: gap-filling ───────────────────────────────────────────── #
-        # Only gap-fill when the initial results are not already sufficient.
-        # Avoids spurious extra searches when top chunks already answer the query.
-        if chunks and not sufficient and confidence < 0.80:
+        # Checkpoint: only gap-fill when budget allows AND confidence genuinely low
+        if chunks and confidence < 0.80 and self._search_count < MAX_TOTAL_SEARCHES:
             gap_queries = await self._find_gaps(query, chunks, query_doc_type)
             if gap_queries:
                 gap_filled = True
@@ -1062,22 +1248,62 @@ class KnowledgebaseSearchTool(BaseToolAgent):
                 )
                 for r in gap_results:
                     if isinstance(r, Exception) or r is None: continue
-                    chunks = self._merge(chunks, [self._format_chunk(c) for c in r])
+                    if isinstance(r, list):
+                        # Tag gap-fill chunks with source so _rerank weights them lower
+                        gap_formatted = []
+                        for c in r:
+                            fc = self._format_chunk(c)
+                            fc["_expand_type"] = "gap"
+                            gap_formatted.append(fc)
+                        chunks = self._merge(chunks, gap_formatted)
                 _, max_rel, confidence = _assess_quality(chunks)
+        elif chunks and confidence < 0.80:
+            logger.info("⚡ Skipping gap-fill — search budget exhausted")
 
         # ── E: Build anchor-centric hybrid context groups ────────────── #
-        # Each anchor expands via 3 strategies in parallel:
-        #   • Structural: chunk_index ± window  (positional)
-        #   • Semantic:   vector search on anchor text, same document
-        #   • Section:    other chunks with same heading (free, from pool)
-        # Chunks are then stitched WITHIN each group before ranking.
+        # Fix 1: cap at MAX_EXPANSIONS anchors.
+        # Fix 3: cluster divergent anchors → separate groups, never mixed.
         context_expanded = False
         groups: List[Dict] = []
-        # Only expand context when the results are not already high-quality.
-        # Sufficient results at ≥55% max relevance don't need anchor expansion.
-        if chunks and (not sufficient or max_rel < ANCHOR_THRESHOLD_HIGH):
-            anchors = _select_anchors(chunks)
-            groups  = await self._build_context_groups(anchors, chunks, document_ids)
+        if chunks:
+            anchors = _select_anchors(chunks)[:MAX_EXPANSIONS]  # hard cap
+
+            # Fix 3: cluster anchors by topic similarity.
+            # Anchors with Jaccard < ANCHOR_DIVERGE_THRESHOLD cover different
+            # topics and MUST NOT share expansion pools — doing so introduces
+            # irrelevant neighbors from the wrong topic into every group.
+            anchor_clusters: List[List[Dict]] = []
+            for anchor in anchors:
+                placed = False
+                for cluster in anchor_clusters:
+                    # Same topic if NOT diverging from the cluster's lead anchor
+                    if not _anchors_diverge(anchor, cluster[0]):
+                        cluster.append(anchor)
+                        placed = True
+                        break
+                if not placed:
+                    anchor_clusters.append([anchor])
+
+            if len(anchor_clusters) > 1:
+                logger.info(
+                    f"🧩 Anchor clustering: {len(anchors)} anchor(s) → "
+                    f"{len(anchor_clusters)} topic cluster(s)"
+                )
+                yield event(AgentEvent.THOUGHT,
+                    f"Anchors cover {len(anchor_clusters)} distinct topic(s) — "
+                    f"building separate context groups per topic"
+                )
+
+            # Build one set of groups per cluster (anchors within a cluster
+            # share expansion pool; anchors across clusters do NOT).
+            all_groups: List[Dict] = []
+            for cluster in anchor_clusters:
+                cluster_groups = await self._build_context_groups(
+                    cluster, chunks, document_ids
+                )
+                all_groups.extend(cluster_groups)
+            groups = all_groups
+
             if groups:
                 context_expanded = True
                 extra = sum(len(g["all_chunks"]) - 1 for g in groups)
@@ -1096,7 +1322,11 @@ class KnowledgebaseSearchTool(BaseToolAgent):
             groups = _rank_groups(groups, query)
 
         # ── G: Compress groups to token budget (never split a group) ─── #
+        # Fix 1: also enforce MAX_GROUPS hard cap before budget compression.
         if groups:
+            if len(groups) > MAX_GROUPS:
+                logger.info(f"✂️ Groups capped: {len(groups)} → {MAX_GROUPS}")
+                groups = groups[:MAX_GROUPS]
             groups = _compress_groups_to_budget(groups)
 
         # ── H: Flatten groups → final chunk list, re-rank ───────────── #
@@ -1263,7 +1493,7 @@ class KnowledgebaseSearchTool(BaseToolAgent):
                                 "Content-Type":  "application/json",
                                 "companyIds":    f"[{self.company_id}]",
                             },
-                            json={"anchors": [{"doc_id": doc_id, "chunk_index": chunk_index, "window": window}], "project_fid": self.agent_id},
+                            json={"anchors": [{"doc_id": doc_id, "chunk_index": chunk_index, "window": window}]},
                         )
                     if resp.status_code == 200:
                         raw = (resp.json().get("data") or {}).get("chunks") or []
@@ -1356,6 +1586,79 @@ class KnowledgebaseSearchTool(BaseToolAgent):
         }
 
     # ------------------------------------------------------------------ #
+    #  Keyword-graph expansion                                            #
+    # ------------------------------------------------------------------ #
+
+    async def _keyword_expansion(
+        self, query: str, document_ids: List
+    ) -> List[Dict]:
+        """
+        Exact/rare-term expansion via the keyword inverted index built at ingestion.
+
+        Extracts non-stop words from the query, sends them to the keyword
+        lookup endpoint, receives matching chunk IDs (pre-computed at index time),
+        then fetches and returns those chunks from Milvus.
+
+        This path is orthogonal to vector search:
+          • Vector search finds semantically similar content (paraphrase-robust)
+          • Keyword expansion finds exact term matches (domain-term-robust)
+
+        Example: query "how many cups of flour for pear tart"
+          → keywords: ["cups", "flour", "pear", "tart"]
+          → keyword index returns chunk IDs from pear tart recipe
+          → even if the recipe says "200g flour" (numeric, not cups),
+            the "pear" + "tart" exact match still surfaces it
+
+        Non-fatal — returns [] on any failure.
+        """
+        if not COMPANY_URL:
+            return []
+
+        # Extract non-stop query words (≥3 chars, no punctuation)
+        query_keywords = [
+            w for w in re.findall(r"\b[a-z]{3,}\b", query.lower())
+            if w not in _STOP_WORDS
+        ]
+        if not query_keywords:
+            return []
+
+        try:
+            url = f"{COMPANY_URL}/aiagentchat/knowledgebase/keywords/lookup"
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    url,
+                    headers={
+                        "Authorization": f"Bearer {self.token}",
+                        "Content-Type":  "application/json",
+                        "companyIds":    f"[{self.company_id}]",
+                    },
+                    json={
+                        "keywords":     query_keywords[:15],   # cap
+                        "document_ids": [int(d) for d in document_ids if str(d).isdigit()],
+                    },
+                )
+            if resp.status_code != 200:
+                return []
+
+            chunk_ids: List[str] = (resp.json().get("data") or {}).get("chunk_ids") or []
+            if not chunk_ids:
+                return []
+
+            fetched = await self._fetch_chunks_by_ids(chunk_ids)
+            for fc in fetched:
+                fc["_is_neighbor"]  = True
+                fc["_expand_type"]  = "keyword"
+            logger.info(
+                f"🔑 Keyword expansion: {len(query_keywords)} term(s) "
+                f"→ {len(chunk_ids)} id(s) → {len(fetched)} chunk(s)"
+            )
+            return fetched
+
+        except Exception as e:
+            logger.warning(f"Keyword expansion failed (non-fatal): {e}")
+            return []
+
+    # ------------------------------------------------------------------ #
     #  Section node expansion                                             #
     # ------------------------------------------------------------------ #
 
@@ -1446,7 +1749,7 @@ class KnowledgebaseSearchTool(BaseToolAgent):
                         "Content-Type":  "application/json",
                         "companyIds":    f"[{self.company_id}]",
                     },
-                    json={"chunk_ids": chunk_ids, "project_fid": self.agent_id},
+                    json={"chunk_ids": chunk_ids},
                 )
             if resp.status_code == 200:
                 raw = (resp.json().get("data") or {}).get("chunks") or []
@@ -1626,12 +1929,26 @@ class KnowledgebaseSearchTool(BaseToolAgent):
         limit: int,
         doc_type: Optional[str],
     ) -> Optional[List[Dict]]:
+        # ── Fix 1: enforce search budget ────────────────────────────── #
+        self._search_count += 1
+        if self._search_count > MAX_TOTAL_SEARCHES:
+            logger.warning(
+                f"🚫 Search budget exhausted ({MAX_TOTAL_SEARCHES} calls) — "
+                f"skipping query '{query[:60]}'"
+            )
+            return []
+
         url     = f"{COMPANY_URL}/aiagentchat/knowledgebase/search"
         payload: Dict[str, Any] = {
             "query":        query,
             "document_ids": document_ids,
             "limit":        limit,
-            "project_fid":  self.agent_id,
+            # project_fid intentionally NOT sent:
+            # The Node.js API builds a Milvus filter `project_fid == <value>` when
+            # this field is present. Chunks are stored with the project's project_fid
+            # (often 0 or the ingestion-time value) which does NOT match agent_id.
+            # Sending it would silently exclude ALL chunks → empty results.
+            # document_ids scoping is sufficient to constrain the search.
         }
         # Do NOT send doc_type as a Milvus filter when document_ids are already
         # scoped. Old chunks indexed before the schema change have an empty doc_type
@@ -1730,6 +2047,9 @@ class KnowledgebaseSearchTool(BaseToolAgent):
             # Section-level virtual node field: JSON list of constituent chunk IDs
             # Only present when chunk_type == 'section_node'
             "section_chunk_ids":  chunk.get("section_chunk_ids"),
+            # Cohesion group: parent_id or section_path hash — used by _rerank
+            # to boost chunks that belong to the same logical unit as top anchors
+            "cohesion_group":     chunk.get("cohesion_group"),
         }
 
     @staticmethod
@@ -1797,7 +2117,6 @@ class KnowledgebaseSearchTool(BaseToolAgent):
                         "Authorization": f"Bearer {self.token}",
                         "companyIds":    f"[{self.company_id}]",
                     },
-                    params={"project_fid": self.agent_id},
                 )
             if response.status_code == 200:
                 result = response.json()

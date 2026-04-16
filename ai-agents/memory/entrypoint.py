@@ -16,8 +16,8 @@ async def create_tool_agent(
     agent_id: Optional[str] = None,
 ):
     """
-    Tool entrypoint for the memory AI Agent tool.
-    Loads MemoryAgentTool from this tool folder (self-contained tool).
+    Plugin entrypoint for the memory tool.
+    Loads MemoryAgentTool from this plugin folder (self-contained plugin).
     """
     agent = MemoryAgentTool(
         llm_provider=llm_provider,

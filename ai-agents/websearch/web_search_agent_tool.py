@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from backend.services.app_agents.base_tool_agent import BaseToolAgent
+from backend.services.ai_agents.base_tool_agent import BaseToolAgent
 
 """
 Web Search Agent Tool (app_code: websearch)
 
 Built-in tool that performs web searches when modelConfig.enableWebSearching is true.
 Uses the connected LLM provider (same as the main agent) - no 3rd party search API.
-When enable_web_search is true, the provider (e.g. OpenRouter) uses its web tool
+When enable_web_search is true, the provider (e.g. OpenRouter) uses its web plugin
 so the model can search the web during generation.
 """
 

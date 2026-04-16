@@ -17,7 +17,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-from backend.services.app_agents.base_tool_agent import BaseToolAgent
+from backend.services.ai_agents.base_tool_agent import BaseToolAgent
 
 # Callback handler routes for this app (must match backend routes in call_routes.py).
 # Full webhook URL = CALL_WEBHOOK_BASE_URL + this route + query params.

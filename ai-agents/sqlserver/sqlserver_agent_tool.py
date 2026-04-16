@@ -15,7 +15,7 @@ import asyncio
 import hashlib
 import time
 
-from backend.services.app_agents.base_tool_agent import BaseToolAgent
+from backend.services.ai_agents.base_tool_agent import BaseToolAgent
 
 logger = logging.getLogger(__name__)
 # Set to INFO to show generated queries

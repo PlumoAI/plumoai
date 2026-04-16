@@ -1,0 +1,11 @@
+{
+  "name": "GitHub",
+  "code": "github",
+  "auth_type": "custom",
+  "required_fields": [
+    { "key": "access_token", "type": "text", "label": "Access Token" }
+  ],
+  "config": {},
+  "is_active": true
+}
+

@@ -1,0 +1,19 @@
+{
+  "name": "Google",
+  "code": "google",
+  "auth_type": "oauth2",
+  "required_fields": [
+    { "key": "client_id", "type": "text", "label": "Client ID" },
+    { "key": "client_secret", "type": "text", "label": "Client Secret" }
+  ],
+  "config": {
+    "scope": "https://www.googleapis.com/auth/calendar https://mail.google.com/",
+    "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+    "token_endpoint": "https://oauth2.googleapis.com/token",
+    "access_type": "offline",
+    "grant_types": ["authorization_code", "refresh_token"],
+    "is_client_registration_required": false
+  },
+  "is_active": true
+}
+

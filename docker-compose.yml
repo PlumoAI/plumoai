@@ -131,6 +131,8 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_SECURE: ${SMTP_SECURE:-}
+      AUTH_BASE_ROUTE : /api/auth
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
     secrets:
       - mysql_db
       - mysql_user

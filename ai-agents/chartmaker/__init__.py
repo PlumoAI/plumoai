@@ -1,4 +1,4 @@
 """
-Chart Maker AI Agent tool package.
+Chart Maker tool plugin package.
 """
 

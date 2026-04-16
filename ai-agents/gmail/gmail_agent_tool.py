@@ -35,7 +35,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-from backend.services.app_agents.base_tool_agent import BaseToolAgent
+from backend.services.ai_agents.connected_service_tool_agent import ConnectedServiceToolAgent
 
 # ----- Constants (single config) -----
 # Base for Gmail REST API v1 (https://developers.google.com/workspace/gmail/api/reference/rest).
@@ -225,7 +225,7 @@ def _parse_batch_response(content: bytes, content_type: str) -> List[Dict]:
 # =============================================================================
 
 
-class GmailAgentTool(BaseToolAgent):
+class GmailAgentTool(ConnectedServiceToolAgent):
     """
     Gmail app agent. Capabilities:
     - Read & understand: list (with pagination), read, summarize message or full thread.
@@ -265,14 +265,7 @@ ACTIONS: list (search emails), read (by message_id), summarize (message or threa
     ):
         self.llm_provider = llm_provider
         self.agent_id = agent_id or ""
-        self.token = token
-        self.company_id = company_id
-        self.user_id = user_id
-        self.app_config = app_config or {}
-        self._credentials_data = self.app_config.get("_gmail_credentials_data") or {}
-        self._credentials = self._credentials_data.get("credentials") or {}
-        self._access_token: Optional[str] = self._credentials.get("access_token")
-        self._connected_service_id = self.app_config.get("connected_service_id")
+        super().__init__(token=token, company_id=company_id, user_id=user_id, app_config=app_config)
         self._httpx_client: Optional[httpx.AsyncClient] = None
         active_config = (
             self.app_config.get("app_config")
@@ -294,66 +287,13 @@ ACTIONS: list (search emails), read (by message_id), summarize (message or threa
 
     def _headers(self) -> Dict[str, str]:
         return {
-            "Authorization": f"Bearer {self._access_token}",
+            "Authorization": f"Bearer {self.access_token}",
             "Content-Type": "application/json",
         }
 
     async def _refresh_access_token(self) -> bool:
-        if not self._connected_service_id or not self.token:
-            logger.warning("Gmail refresh skipped: missing connected_service_id or token")
-            return False
-        url = f"{_AUTH_URL}/servicesCredentials/refresh/{self._connected_service_id}"
-        headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
-        if self.company_id:
-            headers["companyids"] = json.dumps([str(self.company_id)])
-        if self.user_id is not None and str(self.user_id).strip():
-            headers["userId"] = str(self.user_id).strip()
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                r = await client.post(url, headers=headers, json={})
-                if r.status_code == 200:
-                    data = r.json()
-                    if data.get("type") == "success" and isinstance(data.get("data"), dict):
-                        self._access_token = data["data"].get("access_token")
-                        if self._access_token and self._httpx_client:
-                            self._httpx_client.headers["Authorization"] = f"Bearer {self._access_token}"
-                        return bool(self._access_token)
-                if r.status_code >= 400 and self._credentials.get("refresh_token"):
-                    return await self._refresh_via_google_oauth2()
-        except Exception as e:
-            logger.warning("Gmail token refresh failed: %s", e)
-            if self._credentials.get("refresh_token"):
-                return await self._refresh_via_google_oauth2()
-        return False
-
-    async def _refresh_via_google_oauth2(self) -> bool:
-        refresh_token = self._credentials.get("refresh_token")
-        client_id = self._credentials.get("client_id") or self._credentials.get("clientId")
-        client_secret = self._credentials.get("client_secret") or self._credentials.get("clientSecret")
-        if not refresh_token or not client_id or not client_secret:
-            return False
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                r = await client.post(
-                    "https://oauth2.googleapis.com/token",
-                    headers={"Content-Type": "application/x-www-form-urlencoded"},
-                    data={
-                        "client_id": client_id,
-                        "client_secret": client_secret,
-                        "refresh_token": refresh_token,
-                        "grant_type": "refresh_token",
-                    },
-                )
-                if r.status_code != 200:
-                    return False
-                data = r.json()
-                self._access_token = data.get("access_token")
-                if self._access_token and self._httpx_client:
-                    self._httpx_client.headers["Authorization"] = f"Bearer {self._access_token}"
-                return bool(self._access_token)
-        except Exception as e:
-            logger.warning("Gmail Google OAuth2 refresh failed: %s", e)
-        return False
+        ok = await self.refresh_access_token(client=self._httpx_client)
+        return bool(ok and self.access_token)
 
     async def _llm_generate_text(self, prompt: str, max_tokens: int = 500) -> Optional[str]:
         if not self.llm_provider or not hasattr(self.llm_provider, "generate"):
@@ -394,7 +334,7 @@ ACTIONS: list (search emails), read (by message_id), summarize (message or threa
         else:
             r = await self._httpx_client.request(method, url, params=params)
         if r.status_code == 401 and retry_401 and await self._refresh_access_token():
-            self._httpx_client.headers["Authorization"] = f"Bearer {self._access_token}"
+            self._httpx_client.headers["Authorization"] = f"Bearer {self.access_token}"
             return await self._gmail_request(method, path, json_body=json_body, params=params, retry_401=False)
         if r.status_code >= 400:
             logger.warning("Gmail API %s %s -> %s %s", method, path, r.status_code, (r.text or "")[:500])
@@ -419,7 +359,7 @@ ACTIONS: list (search emails), read (by message_id), summarize (message or threa
             ]
             body = "\r\n".join([f"--{boundary}\r\n" + p for p in parts]) + f"\r\n--{boundary}--\r\n"
             headers = {
-                "Authorization": f"Bearer {self._access_token}",
+                "Authorization": f"Bearer {self.access_token}",
                 "Content-Type": f"multipart/mixed; boundary={boundary}",
             }
             try:
@@ -430,7 +370,7 @@ ACTIONS: list (search emails), read (by message_id), summarize (message or threa
                 logger.warning("Gmail batch request failed: %s", e)
                 break
             if r.status_code == 401 and await self._refresh_access_token():
-                self._httpx_client.headers["Authorization"] = f"Bearer {self._access_token}"
+                self._httpx_client.headers["Authorization"] = f"Bearer {self.access_token}"
                 return await self._gmail_batch_get_messages(message_ids)
             if r.status_code >= 400:
                 logger.warning("Gmail batch API %s: %s", r.status_code, (r.text or "")[:500])
@@ -496,7 +436,7 @@ ACTIONS: list (search emails), read (by message_id), summarize (message or threa
             self._httpx_client = httpx.AsyncClient(timeout=30.0, headers=self._headers())
         r = await self._httpx_client.request("POST", url, json=body)
         if r.status_code == 401 and retry_401 and await self._refresh_access_token():
-            self._httpx_client.headers["Authorization"] = f"Bearer {self._access_token}"
+            self._httpx_client.headers["Authorization"] = f"Bearer {self.access_token}"
             return await self._send_message_with_status(raw, thread_id=thread_id, retry_401=False)
         if r.status_code >= 400:
             logger.warning("Gmail API POST /messages/send -> %s %s", r.status_code, (r.text or "")[:500])
@@ -519,14 +459,14 @@ ACTIONS: list (search emails), read (by message_id), summarize (message or threa
     def _resolve_sender_email(self) -> str:
         # Prefer explicit values from credentials payload; avoid extra API call for low latency.
         candidates = [
-            self._credentials.get("email"),
-            self._credentials.get("emailAddress"),
-            self._credentials.get("user_email"),
-            self._credentials.get("account_email"),
-            self._credentials.get("username"),
-            self._credentials_data.get("email"),
-            self._credentials_data.get("emailAddress"),
-            self._credentials_data.get("user_email"),
+            self.credentials.get("email"),
+            self.credentials.get("emailAddress"),
+            self.credentials.get("user_email"),
+            self.credentials.get("account_email"),
+            self.credentials.get("username"),
+            self.service_credential.get("email"),
+            self.service_credential.get("emailAddress"),
+            self.service_credential.get("user_email"),
         ]
         for val in candidates:
             s = (str(val).strip() if val is not None else "")
@@ -2489,12 +2429,12 @@ JSON array:"""
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
                 "Gmail agent init: connected_service_id=%s user_id=%s company_id=%s permissions=%s",
-                self._connected_service_id,
+                self.connected_service_id,
                 self.user_id,
                 self.company_id,
                 getattr(self, "_permissions", "full"),
             )
-        if not self._access_token:
+        if not self.access_token:
             logger.warning("Gmail Agent: no access_token in credentials")
         self._httpx_client = httpx.AsyncClient(timeout=30.0, headers=self._headers())
         logger.debug("Gmail Agent Tool initialized")
@@ -2513,7 +2453,7 @@ JSON array:"""
         tool_args: Optional[Dict[str, Any]] = None,
     ) -> AsyncGenerator[Dict, None]:
         try:
-            if not self._access_token:
+            if not self.access_token:
                 yield event(AgentEvent.RESULT, {
                     "success": False,
                     "response": "Gmail is not connected. Please connect your Gmail account in the app's connected service.",

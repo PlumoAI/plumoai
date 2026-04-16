@@ -75,7 +75,7 @@ def event(event_type: str, content: Any) -> Dict:
     }
 
 
-from backend.services.app_agents.base_tool_agent import BaseToolAgent
+from backend.services.ai_agents.base_tool_agent import BaseToolAgent
 
 
 class CalculatorDatetimeAgentTool(BaseToolAgent):

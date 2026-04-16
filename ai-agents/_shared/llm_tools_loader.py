@@ -7,8 +7,8 @@ from typing import Any
 
 def project_root_from(start_file: str) -> str:
     """
-    Resolve project root from a file inside a tool folder:
-    ai-agents/<tool>/<file>.py -> project root
+    Resolve project root from a file inside tool_plugins/<plugin>/...:
+    tool_plugins/<plugin>/<file>.py -> project root
     """
     return os.path.abspath(os.path.join(os.path.dirname(start_file), "..", ".."))
 

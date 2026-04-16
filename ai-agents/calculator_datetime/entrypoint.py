@@ -16,8 +16,8 @@ async def create_tool_agent(
     agent_id: Optional[str] = None,
 ):
     """
-    Tool entrypoint for the calculator_datetime AI Agent tool.
-    Fully self-contained: loads CalculatorDatetimeAgentTool from this tool folder.
+    Plugin entrypoint for the calculator_datetime tool.
+    Fully self-contained: loads CalculatorDatetimeAgentTool from this plugin folder.
     """
     agent = CalculatorDatetimeAgentTool(
         llm_provider=llm_provider,

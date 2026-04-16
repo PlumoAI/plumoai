@@ -1,13 +1,8 @@
 """
-Shared helpers for AI Agent tools.
+Shared helpers for ai_agents plugins.
 
-Note:
-  - In this repo the tools live under the `ai-agents/` folder.
-  - At runtime, Docker Compose mounts that folder into the `ai-service` container at
-    `/opt/plumoai/app_agents`, so the import path remains `app_agents.*`.
-
-This package exists so tool entrypoints can import:
-    from app_agents._shared.llm_tools_loader import ...
+This package exists so plugin entrypoints can import:
+    from ai_agents._shared.llm_tools_loader import ...
 without relying on implicit namespace packages.
 """
 

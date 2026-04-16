@@ -34,7 +34,7 @@ _CALENDAR_REQUEST_MAX_DELAY = 30.0
 
 logger = logging.getLogger(__name__)
 
-from backend.services.app_agents.base_tool_agent import BaseToolAgent
+from backend.services.ai_agents.connected_service_tool_agent import ConnectedServiceToolAgent
 
 # Google Calendar API v3 base
 CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3"
@@ -60,7 +60,7 @@ def event(event_type: str, content: Any) -> Dict:
     }
 
 
-class GoogleCalendarAgentTool(BaseToolAgent):
+class GoogleCalendarAgentTool(ConnectedServiceToolAgent):
     """App agent for Google Calendar (app_code: google_calendar)."""
 
     TOOL_DESCRIPTION = """Google Calendar: list calendars, list/get/search events, create/update/delete, respond to invitations, free/busy, colors.
@@ -105,77 +105,18 @@ App config (optional): calendar_check_conflicts=true to detect conflicts before 
     ):
         self.llm_provider = llm_provider
         self.agent_id = agent_id or ""
-        self.token = token
-        self.company_id = company_id
-        self.user_id = user_id
-        self.app_config = app_config or {}
-        self._credentials_data = self.app_config.get("_google_calendar_credentials_data") or {}
-        self._credentials = self._credentials_data.get("credentials") or {}
-        self._access_token: Optional[str] = self._credentials.get("access_token")
-        self._connected_service_id = self.app_config.get("connected_service_id")
+        super().__init__(token=token, company_id=company_id, user_id=user_id, app_config=app_config)
         self._httpx_client: Optional[httpx.AsyncClient] = None
 
     def _headers(self) -> Dict[str, str]:
         return {
-            "Authorization": f"Bearer {self._access_token}",
+            "Authorization": f"Bearer {self.access_token}",
             "Content-Type": "application/json",
         }
 
     async def _refresh_access_token(self) -> bool:
-        if not self._connected_service_id or not self.token:
-            return False
-        url = f"{_AUTH_URL}/servicesCredentials/refresh/{self._connected_service_id}"
-        headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
-        if self.company_id:
-            headers["companyids"] = json.dumps([str(self.company_id)])
-        if self.user_id is not None and str(self.user_id).strip():
-            headers["userId"] = str(self.user_id).strip()
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                r = await client.post(url, headers=headers, json={})
-                if r.status_code == 200:
-                    data = r.json()
-                    if data.get("type") == "success" and isinstance(data.get("data"), dict):
-                        self._access_token = data["data"].get("access_token")
-                        if self._access_token and self._httpx_client:
-                            self._httpx_client.headers["Authorization"] = f"Bearer {self._access_token}"
-                        return bool(self._access_token)
-                if r.status_code >= 400 and self._credentials.get("refresh_token"):
-                    return await self._refresh_via_google_oauth2()
-        except Exception as e:
-            logger.warning("Google Calendar token refresh failed: %s", e)
-            if self._credentials.get("refresh_token"):
-                return await self._refresh_via_google_oauth2()
-        return False
-
-    async def _refresh_via_google_oauth2(self) -> bool:
-        refresh_token = self._credentials.get("refresh_token")
-        client_id = self._credentials.get("client_id") or self._credentials.get("clientId")
-        client_secret = self._credentials.get("client_secret") or self._credentials.get("clientSecret")
-        if not refresh_token or not client_id or not client_secret:
-            return False
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                r = await client.post(
-                    "https://oauth2.googleapis.com/token",
-                    headers={"Content-Type": "application/x-www-form-urlencoded"},
-                    data={
-                        "client_id": client_id,
-                        "client_secret": client_secret,
-                        "refresh_token": refresh_token,
-                        "grant_type": "refresh_token",
-                    },
-                )
-                if r.status_code != 200:
-                    return False
-                data = r.json()
-                self._access_token = data.get("access_token")
-                if self._access_token and self._httpx_client:
-                    self._httpx_client.headers["Authorization"] = f"Bearer {self._access_token}"
-                return bool(self._access_token)
-        except Exception as e:
-            logger.warning("Google Calendar OAuth2 refresh failed: %s", e)
-        return False
+        ok = await self.refresh_access_token(client=self._httpx_client)
+        return bool(ok and self.access_token)
 
     async def _calendar_request(
         self,
@@ -196,7 +137,7 @@ App config (optional): calendar_check_conflicts=true to detect conflicts before 
         else:
             r = await self._httpx_client.request(method, url, params=params)
         if r.status_code == 401 and retry_401 and await self._refresh_access_token():
-            self._httpx_client.headers["Authorization"] = f"Bearer {self._access_token}"
+            self._httpx_client.headers["Authorization"] = f"Bearer {self.access_token}"
             return await self._calendar_request(method, path, json_body=json_body, params=params, retry_401=False)
         # Retry with exponential backoff on rate limit or server error
         if r.status_code in (429, 500, 502, 503, 504) and _retry_count < _CALENDAR_REQUEST_MAX_RETRIES:
@@ -941,8 +882,8 @@ Reply with 1-2 short, friendly sentences for the user (e.g. "Your meeting with A
 
     async def initialize(self) -> None:
         if logger.isEnabledFor(logging.DEBUG):
-            logger.debug("Google Calendar agent init: connected_service_id=%s user_id=%s", self._connected_service_id, self.user_id)
-        if not self._access_token:
+            logger.debug("Google Calendar agent init: connected_service_id=%s user_id=%s", self.connected_service_id, self.user_id)
+        if not self.access_token:
             logger.warning("Google Calendar Agent: no access_token in credentials")
         self._httpx_client = httpx.AsyncClient(timeout=30.0, headers=self._headers())
         logger.debug("Google Calendar Agent Tool initialized")
@@ -961,7 +902,7 @@ Reply with 1-2 short, friendly sentences for the user (e.g. "Your meeting with A
         tool_args: Optional[Dict[str, Any]] = None,
     ) -> AsyncGenerator[Dict, None]:
         try:
-            if not self._access_token:
+            if not self.access_token:
                 err_result = {"success": False, "error": "Google Calendar not connected.", "query": user_query}
                 yield event(AgentEvent.RESULT, err_result)
                 yield event(AgentEvent.FINAL, {"success": False, "response": json.dumps(err_result, default=str), "result": err_result})

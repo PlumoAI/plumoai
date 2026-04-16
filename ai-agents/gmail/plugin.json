@@ -3,10 +3,10 @@
   "app_codes": ["gmail"],
   "type": "python_tool_agent",
   "display_name": "Gmail Agent",
-  "description": "Reads, summarizes, drafts, and sends email via Gmail.",
-  "entrypoint": "entrypoint.py",
-  "version": "0.1.0",
-  "core_min_version": "0.1.0",
-  "permissions": ["network"]
+  "description": "Gmail AI Agent allows this AI Digital Employee to securely connect with Gmail and manage email communication using natural language.\r\nThe agent can read, send, reply, draft, label, search, and organize emails, manage attachments, and handle conversations strictly based on the permissions granted to the connected Gmail credentials while maintaining privacy, security, and reliable email operations.",
+  "required_fields": [],
+  "service_provider_code": "google",
+  "icon": "gmail.svg",
+  "entrypoint": "entrypoint.py"
 }
 

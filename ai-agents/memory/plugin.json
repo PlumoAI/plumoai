@@ -5,9 +5,6 @@
   "display_name": "Memory",
   "description": "Long-term memory — stores and recalls user-specific facts, preferences, goals, and identity information across sessions.",
   "entrypoint": "entrypoint.py",
-  "version": "0.1.0",
-  "core_min_version": "0.1.0",
-  "auto_attach_to_all_agents": true,
-  "permissions": ["network"]
+  "auto_attach_to_all_agents": true
 }
 
