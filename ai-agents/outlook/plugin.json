@@ -1,0 +1,12 @@
+{
+  "plugin_id": "outlook",
+  "app_codes": ["outlook"],
+  "type": "python_tool_agent",
+  "display_name": "Outlook Email Agent",
+  "description": "Connect Microsoft Outlook mail to read, search, send, reply to, and organize email conversations using natural language.",
+  "required_fields": [],
+  "service_provider_code": "microsoft",
+  "icon": "icons8-outlook.svg",
+  "entrypoint": "entrypoint.py",
+  "auto_attach_to_all_agents": false
+}
