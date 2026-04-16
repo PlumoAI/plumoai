@@ -265,11 +265,12 @@ services:
     # /bin/sh + path avoids broken shebang when bind-mounted files have Windows CRLF ("no such file or directory")
     entrypoint: ["/bin/sh", "/scripts/mysql-root-secrets-entrypoint.sh"]
     healthcheck:
-      # First init (empty volume) on Windows / slow disks often takes 1–3+ min; short start_period marks mysql unhealthy and blocks auth/company.
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
+      # Verify authenticated readiness instead of treating "access denied" as healthy.
+      # On Windows / WSL and slow disks, first boot can still take several minutes.
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$$(cat /run/secrets/mysql_root_password)\" --silent"]
+      interval: 20s
+      timeout: 15s
+      retries: 8
       start_period: 180s
     command:
       - --default-authentication-plugin=mysql_native_password
@@ -307,12 +308,13 @@ services:
     container_name: plumoai-mongodb
     restart: unless-stopped
     healthcheck:
-      # mongosh spawns a heavy Node.js process; --quiet + 30s interval reduce CPU overhead.
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 40s
+      # mongosh is relatively heavy in containers and can briefly stall on Windows/WSL
+      # under I/O pressure, so keep the check lightweight and allow more time.
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"quit(db.adminCommand({ ping: 1 }).ok ? 0 : 2)\""]
+      interval: 45s
+      timeout: 20s
+      retries: 8
+      start_period: 90s
     # WiredTiger cache = ~50% of container memory limit.
     # 512M cap starves the cache (only ~256MB), causing heavy I/O and slow
     # serverStatus/health-check responses. Raise to 1G to match MySQL.
