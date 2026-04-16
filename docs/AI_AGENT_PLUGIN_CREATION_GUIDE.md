@@ -595,7 +595,7 @@ When a user creates a **new credential** for a Service Provider in the UI:
 
 **Example (OAuth provider credential screen):**
 
-![Provider credential screen (required fields + OAuth connect)](docs/assets/provider-credential-required-fields-oauth.png)
+![Provider credential screen (required fields + OAuth connect)](assets/provider-credential-required-fields-oauth.png)
 
 ---
 
@@ -671,7 +671,7 @@ This is the process for someone who wants to add your new agent/provider by copy
 
 **Where you should see it (example):**
 
-![All AI Agents screen (example)](docs/assets/all-ai-agents.png)
+![All AI Agents screen (example)](assets/all-ai-agents.png)
 
 If your agent folder is correct and the app has been restarted/refreshed, your new agent will appear in the “All AI Agents” list like the example above.
 
@@ -690,11 +690,11 @@ When you click **Connect** on an AI Agent card, the UI modal is built from the a
 
 **Example (Gmail Agent modal):**
 
-![Gmail Agent modal with Connect](docs/assets/gmail-connect-modal.png)
+![Gmail Agent modal with Connect](assets/gmail-connect-modal.png)
 
 **Example (Select Credential appears when provider auth is used):**
 
-![Gmail Agent modal showing Select Credential](docs/assets/gmail-select-credential.png)
+![Gmail Agent modal showing Select Credential](assets/gmail-select-credential.png)
 
 #### Selecting (or creating) a credential for the agent
 
@@ -708,7 +708,7 @@ After selecting the credential, click **Save** so the agent uses that credential
 
 **Example (credential picker with Create button):**
 
-![Credential picker (list + create)](docs/assets/credential-picker.png)
+![Credential picker (list + create)](assets/credential-picker.png)
 
 ---
 

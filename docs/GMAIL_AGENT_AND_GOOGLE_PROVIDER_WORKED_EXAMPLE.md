@@ -17,11 +17,11 @@ This document is **UI-first**:
 
 ### Screenshots used in this worked example
 
-- “All AI Agents” list: `docs/assets/all-ai-agents.png`
-- Agent Connect modal: `docs/assets/gmail-connect-modal.png`
-- Agent Select Credential modal: `docs/assets/gmail-select-credential.png`
-- Credential picker (list + create): `docs/assets/credential-picker.png`
-- Provider “Add New Credential” (required fields + OAuth connect): `docs/assets/provider-credential-required-fields-oauth.png`
+- “All AI Agents” list: `assets/all-ai-agents.png`
+- Agent Connect modal: `assets/gmail-connect-modal.png`
+- Agent Select Credential modal: `assets/gmail-select-credential.png`
+- Credential picker (list + create): `assets/credential-picker.png`
+- Provider “Add New Credential” (required fields + OAuth connect): `assets/provider-credential-required-fields-oauth.png`
 
 ### 1) Relationship: Service Provider vs AI Agent (what connects to what)
 
@@ -72,7 +72,7 @@ Minimum rules to follow:
 
 When the Google provider is `auth_type: "oauth2"`, the UI shows the provider’s **required fields** and an OAuth **Connect** button.
 
-![Provider credential screen (required fields + OAuth connect)](docs/assets/provider-credential-required-fields-oauth.png)
+![Provider credential screen (required fields + OAuth connect)](assets/provider-credential-required-fields-oauth.png)
 
 ### 2.3 `config.json` (recommended split for OAuth settings)
 
@@ -177,7 +177,7 @@ Production rule:
 
 **Where Gmail should appear (example):**
 
-![All AI Agents screen (example)](docs/assets/all-ai-agents.png)
+![All AI Agents screen (example)](assets/all-ai-agents.png)
 
 ### 5.2 Connect Google once, reuse for Gmail (and other Google tools)
 
@@ -186,15 +186,15 @@ Production rule:
 
 **Gmail agent Connect entry point (example):**
 
-![Gmail Agent modal with Connect](docs/assets/gmail-connect-modal.png)
+![Gmail Agent modal with Connect](assets/gmail-connect-modal.png)
 
 **Select Credential appears because Gmail uses a provider (`service_provider_code: "google"`):**
 
-![Gmail Agent modal showing Select Credential](docs/assets/gmail-select-credential.png)
+![Gmail Agent modal showing Select Credential](assets/gmail-select-credential.png)
 
 **Credential picker (list existing credentials, or Create a new one):**
 
-![Credential picker (list + create)](docs/assets/credential-picker.png)
+![Credential picker (list + create)](assets/credential-picker.png)
 
 **Key idea:** users connect **providers**, not “folders”. Multiple tools can reuse the same provider connection.
 
