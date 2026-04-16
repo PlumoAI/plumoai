@@ -535,23 +535,25 @@ Create `service-providers/<provider_code>/provider.json`.
 
 #### Provider code rule (critical)
 
-The **folder name** is the provider code used by the UI and by `service_provider_code` in agents.
+In this project, the provider is identified by its **code**, and your folder naming should align with it.
 
 - Use a stable, URL-safe folder name (letters, numbers, `_`, `-`)
 - Avoid spaces and path characters
-- Do not rely on a `code` field inside JSON to define the provider code (keep it aligned with the folder name if you include it)
+- Keep the folder name and JSON `"code"` the same (example: `service-providers/google/provider.json` has `"code": "google"`).
 
-#### Fields the UI should use (recommended keys)
+#### Provider schema (aligned with this repo)
 
-Depending on your deployment, the provider catalog accepts snake_case and sometimes camelCase.
+Your `service-providers/<provider_code>/provider.json` should follow the same keys used by the providers in this repo:
 
-- **Display name**: `provider_name` (or `providerName`)  
-  - Some existing providers in this repo also include `name`. If you want maximum compatibility across UI builds, set `provider_name` and keep `name` aligned.
-- **Auth mode**: `auth_type` (or `authType`)
-- **Credential form schema**: `required_fields` (or `requiredFields`)
+- **Display name**: `name` (string)
+- **Provider code**: `code` (string)
+- **Auth mode**: `auth_type` (string, example: `oauth2`, `custom`)
+- **Credential form schema**: `required_fields` (array of fields)
 - **Technical settings**: `config` (object)
-- **Offered or not**: `is_active` (or `isActive`)
-- **Icon**: `icon` (relative path like `"./google.svg"`)
+- **Optional**: `icon` (relative path like `"./google.svg"`)
+- **Optional**: `is_active` (boolean)
+
+If your UI build also supports alternate key names, you can still include them, but for consistency, prefer the schema above.
 
 #### `auth_type` values (what the UI does)
 
@@ -579,7 +581,6 @@ For `auth_type: "oauth2"`, `config` should include:
 - Authorize URL (`authorization_endpoint` or equivalent key your deployment supports)
 - Token URL (`token_endpoint` or equivalent key)
 - Requested scope(s) (`scope` string or `scopes` array/string)
-- Client (`client_id` / `clientId`) and (if required) secret (`client_secret` / `clientSecret`)
 - Optional flow options: `access_type` (offline), `grant_types`, etc.
 
 **Redirect URL rule (UI-first):** when registering the app at the vendor, always copy the **Redirect/Reply URL exactly as shown in your UI** for that provider/environment. Do not guess.
@@ -602,7 +603,6 @@ Your `provider.json` can follow this shape (based on providers already in this r
 
 ```json
 {
-  "provider_name": "Provider Display Name",
   "name": "Provider Display Name",
   "code": "<provider_code>",
   "auth_type": "oauth2",
@@ -647,7 +647,7 @@ Example template for `custom`:
 
 - **`code` must be unique** across all providers.
 - Keep `required_fields` minimal and UI-friendly (clear labels).
-- Keep secrets (like OAuth client credentials) in `config.json` (or in the UI credential store), not in agent code.
+- Treat `config` as non-secret provider metadata (endpoints, scopes, flags). Secrets should be entered/stored via the UI credential flow.
 - If you include `icon`, store it in the same provider folder.
 
 ---
