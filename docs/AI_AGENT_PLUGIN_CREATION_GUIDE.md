@@ -1,9 +1,3 @@
-## AI Agent Tool Creation Guide
-
-This document has moved.
-
-- New location: [`docs/AI_AGENT_PLUGIN_CREATION_GUIDE.md`](docs/AI_AGENT_PLUGIN_CREATION_GUIDE.md)
-
 ## AI Agent + Service Provider Creation Guide (Production)
 
 > **Purpose**: A production-ready, UI-first guide to ship new AI agents and new service providers by **adding folders**—no internal persistence details, no deployment secrets, and no direct API references.

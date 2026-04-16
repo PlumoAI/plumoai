@@ -207,7 +207,7 @@ A single AI Employee (Just like human) can use **multiple AI Agents simultaneous
 
 AI Agent tools live in `ai-agents/` in this repo and are mounted into the `ai-service` container at runtime.
 
-- Guide: [AI Agent Tool Creation Guide](AI_AGENT_PLUGIN_CREATION_GUIDE.md)
+- Guide: [AI Agent Tool Creation Guide](docs/AI_AGENT_PLUGIN_CREATION_GUIDE.md)
 
 ---
 

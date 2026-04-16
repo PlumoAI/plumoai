@@ -3,7 +3,7 @@
 This document explains the existing **SQL Server** AI Agent tool and how it matches the creation guide.
 
 For the full “how to build your own”, read:
-- [AI Agent Tool Creation Guide](../../AI_AGENT_PLUGIN_CREATION_GUIDE.md)
+- [AI Agent Tool Creation Guide](../../docs/AI_AGENT_PLUGIN_CREATION_GUIDE.md)
 
 ---
 
