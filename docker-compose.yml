@@ -221,6 +221,35 @@ services:
       - "traefik.http.middlewares.api-strip.stripprefix.prefixes=/api/company"
       - "traefik.http.routers.api.middlewares=api-strip,sec-headers,ratelimit"
 
+
+  plumoai-api:
+    image: plumoai/plumoai-public-api:latest
+    container_name: plumoai-api
+    restart: unless-stopped
+    ports:
+      # Host access: http://localhost:3010/api/v1/... (maps to container port 3010)
+      - "3010:3010"
+    environment:
+      PORT: "3010"
+      AUTH_API_BASE_URL: ${AUTH_API_BASE_URL:-http://auth:3000}
+      COMPANY_API_BASE_URL: ${COMPANY_API_BASE_URL:-http://company:3001}
+      ENCRYPTION_KEY: ${PLUMOAI_PUBLIC_API_ENCRYPTION_KEY:-PlumoAi@7861}
+    networks:
+      - internal
+      - frontend
+    labels:
+      - "traefik.enable=true"
+      # Public API: keep the /api/v1 prefix when forwarding to the backend (no stripPrefix).
+      # Use distinct router/service names to avoid clashing with the existing `api` router/service
+      # used by the company service.
+      - "traefik.http.routers.plumoai-public-api.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/api/v1`)"
+      - "traefik.http.routers.plumoai-public-api.entrypoints=websecure"
+      - "traefik.http.routers.plumoai-public-api.tls.certresolver=mytlschallenge"
+      - "traefik.http.routers.plumoai-public-api.priority=150"
+      - "traefik.http.routers.plumoai-public-api.service=plumoai-public-api"
+      - "traefik.http.services.plumoai-public-api.loadbalancer.server.port=3010"
+      - "traefik.http.routers.plumoai-public-api.middlewares=sec-headers,ratelimit"
+
   # ------------------- AI Service (internal only — no exposed URL) -------------------
   # Other services call it by hostname: http://ai:<port> (e.g. http://ai:3000)
   # platform: linux/amd64 ensures the AMD64 image is used on ARM hosts (Windows/Linux ARM).
@@ -243,7 +272,8 @@ services:
         limits: { memory: 1G }
         reservations: { memory: 256M }
     volumes:
-      - ./ai-agents:/opt/plumoai/app_agents:ro
+      # Writable so stdio MCP servers (e.g. plumoai-mcp) can run `npm ci` at runtime when needed.
+      - ./ai-agents:/opt/plumoai/app_agents
     environment:
       PLUMOAI_APP_AGENTS_EXTERNAL_DIR: /opt/plumoai/app_agents
       AUTH_URL: ${AUTH_URL:-http://auth:3000}

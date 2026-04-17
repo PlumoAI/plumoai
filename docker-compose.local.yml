@@ -80,3 +80,13 @@ services:
       - "traefik.http.services.api.loadbalancer.server.port=3001"
       - "traefik.http.middlewares.api-strip.stripprefix.prefixes=/api/company"
       - "traefik.http.routers.api-http.middlewares=api-strip,sec-headers,ratelimit"
+
+  plumoai-api:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.plumoai-public-api-http.rule=PathPrefix(`/api/v1`)"
+      - "traefik.http.routers.plumoai-public-api-http.entrypoints=web"
+      - "traefik.http.routers.plumoai-public-api-http.priority=150"
+      - "traefik.http.routers.plumoai-public-api-http.service=plumoai-public-api"
+      - "traefik.http.services.plumoai-public-api.loadbalancer.server.port=3010"
+      - "traefik.http.routers.plumoai-public-api-http.middlewares=sec-headers,ratelimit"

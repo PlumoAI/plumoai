@@ -12,3 +12,4 @@ secrets/
 ## Local storage (default local uploads path)
 storage/
 
+node_modules/

@@ -1,0 +1,10 @@
+{
+  "plugin_id": "plumoai",
+  "app_codes": ["plumoai"],
+  "type": "mcp_wrapper",
+  "display_name": "PlumoAI",
+  "description": "PlumoAI AI Agent allows this AI Digital Employee to securely interact with the PlumoAI platform Projects, Tables, Web Documents, coordinate AI Employees, workflows, and internal resources using natural language. The agent can read and write data strictly based on the permissions granted to the connected PlumoAI credentials while enforcing organization, workspace, and role based access controls.",
+  "entrypoint": "entrypoint.py",
+  "service_provider_code": "plumoai"
+}
+
