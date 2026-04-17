@@ -17,21 +17,18 @@
     "@modelcontextprotocol/sdk": "^1.17.4",
     "@tsconfig/node22": "^22.0.1",
     "axios": "^1.11.0",
-    "bcrypt": "^5.1.1",
     "dotenv": "^16.4.5",
     "express": "^4.18.2",
     "fast-jwt": "^6.0.2",
     "fastmcp": "^3.15.2",
     "get-jwks": "^11.0.1",
-    "jsonwebtoken": "^9.0.2",
-    "mysql2": "^3.10.0"
+    "jsonwebtoken": "^9.0.2"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "devDependencies": {
-    "@types/bcrypt": "^6.0.0",
     "@types/express": "^5.0.3",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.3.0",

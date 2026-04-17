@@ -1,6 +1,5 @@
 import { FastMCP } from "fastmcp";
 import { z } from "zod"; // Or any validation library that supports Standard Schema
-import authService from "./services/auth.serve.js";
 import axios from "axios";
 import { verifyToken, verifyTokenWithSecret } from "./utils/jwt.js";
 import { StoredProcedureService } from "./utils/sp_caller_service.js";
@@ -11,19 +10,15 @@ const server = new FastMCP({
     version: "1.0.0",
     authenticate: async (request) => {
         try {
-            const client_id = request.headers["client_id"];
-            const client_secret = request.headers["client_secret"];
             const pat = request.headers["pat"];
-            var auth = await authService.authenticate(client_id + "", client_secret + "");
             var userPayload = verifyTokenWithSecret(pat + "", "gfadsjhgfsdajhg4847329842kfjadshfkjad");
-            if (!auth || !userPayload || userPayload.companyIds.indexOf(parseInt(auth.companyId)) < 0) {
+            if (!userPayload) {
                 throw new Response(JSON.stringify({ error: "Invalid Credentials" }), {
                     status: 401, headers: { "Content-Type": "application/json" }
                 });
             }
-            logger.info("Authenticated request for company:", auth.companyId, "user:", userPayload.userId);
-            logger.debug("Authenticated request token:", auth.token);
-            return { access_token: auth.token, user_access_token: pat, expires_in: 900, companyId: auth.companyId, userId: userPayload.userId };
+            logger.info("Authenticated request user:", userPayload.userId);
+            return { user_access_token: pat, expires_in: 900, companyId: String(userPayload.companyId ?? ""), userId: userPayload.userId };
         }
         catch (err) {
             logger.error(err);
@@ -680,6 +675,8 @@ function encryptHtml(htmlStr) {
 }
 function checkAccess(auth) {
     try {
+        if (!auth.access_token)
+            return true;
         var payload = verifyToken(auth.access_token);
         if (payload.company != null) {
             return true;
