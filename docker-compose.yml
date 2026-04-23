@@ -182,7 +182,7 @@ services:
       options: { max-size: "10m", max-file: "3" }
     volumes:
       - ./ai-agents:/opt/plumoai/ai-agents:ro
-      - ./storage:/opt/plumoai/storage:ro
+      - ./storage:/opt/plumoai/storage
     environment:
       PLUMOAI_AI_AGENTS_APPS_PATH: /opt/plumoai/ai-agents
       LOCAL_STORAGE_PATH: /opt/plumoai/storage

@@ -2,12 +2,10 @@ import axios from 'axios';
 export class StoredProcedureService {
     constructor() {
         this.rootURLCompliance = process.env.COMPLIANCE_URL || "";
+        console.log(this.rootURLCompliance);
     }
     async storedProcedureComplianceDb(dataParam, companyId, options = {}, loginUserToken) {
         const { isOpenApi = false, isLog = false } = options;
-        if (companyId === undefined || companyId === null || companyId === "") {
-            throw Error("Missing companyId for storedProcedureComplianceDb");
-        }
         let companyIds = [];
         companyIds = [companyId.toString()];
         let _loginUserToken = loginUserToken;
@@ -25,10 +23,13 @@ export class StoredProcedureService {
                 headers,
                 timeout: 50000,
             };
+            console.log(process.env.COMPLIANCE_URL);
+            console.log(process.env);
             const response = await axios.post(`${process.env.COMPLIANCE_URL}store/procedure/execute`, dataParam, config);
             return response.data;
         }
         catch (error) {
+            console.log(error);
             throw Error(JSON.stringify(error?.response?.data ?? "Unknown error occurred"));
         }
     }

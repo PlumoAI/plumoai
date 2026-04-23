@@ -1,0 +1,9 @@
+{
+  "plugin_id": "loop_executor",
+  "app_codes": ["loop_executor"],
+  "type": "python_tool_agent",
+  "display_name": "Loop Executor",
+  "description": "Expands a batch goal into normal plan steps for the main runner (per-item and optional aggregate). Use when a prior step returns N records/contacts/rows (and optional KB context) and the same workflow should run on each item. Does not execute other tools itself; the runner executes the returned steps like any other plan step.",
+  "entrypoint": "entrypoint.py",
+  "auto_attach_to_all_agents": true
+}

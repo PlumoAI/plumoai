@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.services.app_agents.base_tool_agent import BaseToolAgent
+from backend.services.ai_agents.base_tool_agent import BaseToolAgent
 
 """
 Knowledgebase Search Tool  —  self-driven, profile-aware
@@ -1101,7 +1101,8 @@ class KnowledgebaseSearchTool(BaseToolAgent):
 
         # ── H: Flatten groups → final chunk list, re-rank ───────────── #
         # Use stitched_chunks from each ranked group as the unit of context.
-        # Re-rank the flat list for final ordering within the kept budget.
+        # Fast BM25-blend rerank first, then LLM cross-encoder rerank on
+        # the top-8 for final precision ordering.
         if groups:
             flat: List[Dict] = []
             for g in groups:
@@ -1122,7 +1123,17 @@ class KnowledgebaseSearchTool(BaseToolAgent):
             if chunks:
                 chunks = _compress_to_budget(chunks)
 
-        # ── I: cache + emit ──────────────────────────────────────────── #
+        # LLM cross-encoder rerank: score (query, chunk) pairs for final
+        # precision ordering.  Runs on top-8 after the fast BM25-blend pass.
+        if chunks:
+            chunks = await self._llm_rerank(query, chunks, top_k=8)
+
+        # ── I: structured extraction + cache + emit ──────────────────── #
+        # Extract named items (services, products, steps…) from final chunks
+        # so downstream tools receive a clean enumerable list alongside the
+        # raw chunk text.  Non-fatal — {} when LLM unavailable or no items found.
+        structured_data = await self._extract_structured_data(query, chunks)
+
         if chunks:
             self._search_cache[self._make_cache_key(query, search_scope, search_depth)] = chunks
 
@@ -1140,6 +1151,8 @@ class KnowledgebaseSearchTool(BaseToolAgent):
         if reformulated:     obs_parts.append("(query reformulated)")
         if gap_filled:       obs_parts.append("(gap-filled)")
         if context_expanded: obs_parts.append("(context expanded)")
+        if structured_data.get("items"):
+            obs_parts.append(f"({len(structured_data['items'])} item(s) extracted)")
         yield event(AgentEvent.OBSERVATION, " ".join(obs_parts))
 
         final_depth = "deep" if (search_depth == "deep" or escalated) else "normal"
@@ -1147,6 +1160,7 @@ class KnowledgebaseSearchTool(BaseToolAgent):
             query, chunks, search_scope, final_depth, confidence,
             escalated=escalated, reformulated=reformulated, gap_filled=gap_filled,
             doc_type_distribution=type_dist,
+            structured_data=structured_data,
         ))
 
     # ------------------------------------------------------------------ #
@@ -1457,6 +1471,166 @@ class KnowledgebaseSearchTool(BaseToolAgent):
         return []
 
     # ------------------------------------------------------------------ #
+    #  HyDE — Hypothetical Document Embedding                            #
+    # ------------------------------------------------------------------ #
+
+    async def _generate_hyde_query(self, query: str, doc_type: Optional[str]) -> Optional[str]:
+        """
+        HyDE: generate a short hypothetical ideal answer to the query and
+        return it as an extra retrieval string.
+
+        The hypothesis is written as if it came from the KB document itself,
+        so its embedding lands much closer to the relevant chunks than the
+        raw question embedding does.  This is especially effective when the
+        query uses question phrasing ("what services…") but the KB uses
+        declarative phrasing ("we offer…").
+
+        Non-fatal — returns None on any failure or when no LLM is available.
+        """
+        if not self.llm_provider:
+            return None
+        style = doc_type or "company knowledge base"
+        prompt = (
+            f"Write a concise 2–3 sentence passage that would appear verbatim in a "
+            f"{style} document and directly answers the question below.\n"
+            f"Write ONLY the passage — no preamble, no explanation, no quotation marks.\n\n"
+            f"Question: {query}"
+        )
+        try:
+            result = await self._llm_call(prompt, max_tokens=150)
+            if result and len(result.strip()) > 20:
+                logger.info(f"💡 HyDE generated ({len(result)} chars) for '{query[:60]}'")
+                return result.strip()
+        except Exception as e:
+            logger.debug(f"HyDE generation failed (non-fatal): {e}")
+        return None
+
+    # ------------------------------------------------------------------ #
+    #  LLM cross-encoder reranker                                         #
+    # ------------------------------------------------------------------ #
+
+    async def _llm_rerank(self, query: str, chunks: List[Dict], top_k: int = 8) -> List[Dict]:
+        """
+        LLM cross-encoder reranking: score each (query, chunk) pair for
+        relevance and reorder the top_k candidates accordingly.
+
+        Unlike the fast BM25-blend in _rerank(), this scores true semantic
+        relevance the way a cross-encoder model would — it reads the query
+        AND the chunk together and assigns a coherent relevance score.
+
+        Only applied to top_k candidates; remainder are appended unchanged.
+        Falls back to original order on any failure (non-fatal).
+        """
+        if not self.llm_provider or len(chunks) < 3:
+            return chunks
+
+        candidates = chunks[:top_k]
+        rest = chunks[top_k:]
+
+        excerpts = []
+        for i, chunk in enumerate(candidates):
+            text = (chunk.get("chunk_text") or "")[:400].replace("\n", " ").strip()
+            heading = (chunk.get("heading") or "").strip()
+            excerpts.append(f"{i + 1}. [{heading}] {text}")
+
+        prompt = (
+            f"You are a relevance ranker for a knowledge base search.\n"
+            f"Query: \"{query}\"\n\n"
+            f"Rate each passage's relevance to the query on a scale of 0–10 "
+            f"(10 = directly answers the query, 0 = irrelevant).\n\n"
+            + "\n".join(excerpts)
+            + f"\n\nReturn ONLY a JSON array of {len(candidates)} integer scores in order.\n"
+            f"Example: [8, 3, 9, 1, 5]"
+        )
+        try:
+            raw = await self._llm_call(prompt, max_tokens=80)
+            if raw:
+                match = re.search(r"\[[\d\s,\.]+\]", raw.strip())
+                if match:
+                    scores = json.loads(match.group())
+                    if isinstance(scores, list) and len(scores) == len(candidates):
+                        paired = sorted(
+                            zip([float(s) for s in scores], candidates),
+                            key=lambda x: x[0],
+                            reverse=True,
+                        )
+                        reranked = [c for _, c in paired]
+                        logger.info(
+                            "🎯 LLM reranked %d chunks | top=%s→%s | query='%s'",
+                            len(candidates),
+                            candidates[0].get("chunk_id"),
+                            reranked[0].get("chunk_id"),
+                            query[:50],
+                        )
+                        return reranked + rest
+        except Exception as e:
+            logger.debug(f"LLM reranking failed (non-fatal): {e}")
+        return chunks
+
+    # ------------------------------------------------------------------ #
+    #  Structured data extraction                                          #
+    # ------------------------------------------------------------------ #
+
+    async def _extract_structured_data(self, query: str, chunks: List[Dict]) -> Dict:
+        """
+        Extract named items from the final chunk set into a machine-readable
+        structured dict so downstream tools (AI Writer, CRM steps) receive a
+        clean enumerable list rather than having to parse raw PDF text.
+
+        The LLM reads the top-4 chunks together, identifies what kind of list
+        the content contains (services, products, steps, policies, ingredients
+        …), and returns categorised items.  Categories are derived from the
+        content itself — no hardcoded field names.
+
+        Result shape:
+            {
+              "items":      ["item A", "item B", ...],   # flat de-duped list
+              "categories": {"Category": ["item A", ...]}  # null when ungrouped
+            }
+
+        Non-fatal — returns {} on any failure.
+        """
+        if not self.llm_provider or not chunks:
+            return {}
+
+        combined = "\n---\n".join(
+            (c.get("chunk_text") or "")[:600]
+            for c in chunks[:4]
+            if c.get("chunk_text")
+        ).strip()
+        if not combined:
+            return {}
+
+        prompt = (
+            f"Extract all distinct named items from the passages below that are relevant "
+            f"to this query: \"{query}\"\n"
+            f"Identify what kind of items they are (services, products, steps, rules, etc.) "
+            f"and group them by category if clear groupings exist in the text.\n\n"
+            f"Return ONLY valid JSON:\n"
+            f'{{"items": ["item1", "item2", ...], "categories": {{"Category": ["item1", ...]}}}}\n'
+            f"Set categories to null if no grouping is apparent.\n"
+            f"Do not invent items — only include what is explicitly stated in the text.\n\n"
+            f"Text:\n{combined}\n\nJSON:"
+        )
+        try:
+            raw = await self._llm_call(prompt, max_tokens=500)
+            if raw:
+                match = re.search(r"\{.*\}", raw.strip(), re.DOTALL)
+                if match:
+                    parsed = json.loads(match.group())
+                    if isinstance(parsed, dict) and isinstance(parsed.get("items"), list) and parsed["items"]:
+                        cats = parsed.get("categories") or {}
+                        logger.info(
+                            "📋 Structured extraction: %d item(s) | categories=%s",
+                            len(parsed["items"]),
+                            list(cats.keys()) if isinstance(cats, dict) else "none",
+                        )
+                        return parsed
+        except Exception as e:
+            logger.debug(f"Structured extraction failed (non-fatal): {e}")
+        return {}
+
+    # ------------------------------------------------------------------ #
     #  Deep fan-out fetch                                                  #
     # ------------------------------------------------------------------ #
 
@@ -1467,7 +1641,23 @@ class KnowledgebaseSearchTool(BaseToolAgent):
         max_results: int,
         query_doc_type: Optional[str],
     ) -> List[Dict]:
-        sub_queries = await self._decompose_query(query, query_doc_type)
+        # Run query decomposition and HyDE in parallel — HyDE adds one
+        # extra sub-query whose embedding is hypothetical-answer-shaped,
+        # landing closer to the KB chunks than the raw question does.
+        sub_queries_result, hyde_query = await asyncio.gather(
+            self._decompose_query(query, query_doc_type),
+            self._generate_hyde_query(query, query_doc_type),
+            return_exceptions=True,
+        )
+        sub_queries: List[str] = (
+            sub_queries_result
+            if isinstance(sub_queries_result, list)
+            else [query]
+        )
+        if isinstance(hyde_query, str) and hyde_query and hyde_query not in sub_queries:
+            sub_queries.append(hyde_query)
+            logger.info(f"💡 HyDE appended as sub-query #{len(sub_queries)}")
+
         logger.info(f"🔀 Deep fetch: {len(sub_queries)} sub-queries (style={query_doc_type or 'general'})")
 
         results = await asyncio.gather(
@@ -1759,13 +1949,14 @@ class KnowledgebaseSearchTool(BaseToolAgent):
         gap_filled: bool,
         source: str = "search",
         doc_type_distribution: Optional[Dict] = None,
+        structured_data: Optional[Dict] = None,
     ) -> Dict:
         quality = (
             "high"   if confidence >= 0.65
             else "medium" if confidence >= 0.35
             else "low"
         )
-        return {
+        result: Dict = {
             "success":               True,
             "query":                 query,
             "results":               chunks,
@@ -1780,6 +1971,11 @@ class KnowledgebaseSearchTool(BaseToolAgent):
             "source":                source,
             "doc_type_distribution": doc_type_distribution or {},
         }
+        # Only include structured_data when extraction produced actual items —
+        # an empty dict adds noise to provided_data for downstream tools.
+        if structured_data and structured_data.get("items"):
+            result["structured_data"] = structured_data
+        return result
 
     # ------------------------------------------------------------------ #
     #  Source detail lookup                                                #
