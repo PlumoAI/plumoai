@@ -1,0 +1,11 @@
+{
+  "plugin_id": "apify",
+  "app_codes": ["apify"],
+  "type": "mcp_wrapper",
+  "display_name": "Apify",
+  "description": "An Apify agent runs web scrapers, automation actors, and data extraction tasks from the Apify Store using natural language.",
+  "service_provider_code": "apify",
+  "icon": "apify.svg",
+  "mcp_url": "https://mcp.apify.com",
+  "server_type": "http"
+}

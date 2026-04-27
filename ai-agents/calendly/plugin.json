@@ -4,8 +4,8 @@
   "type": "mcp_wrapper",
   "display_name": "Calendly",
   "description": "A Calendly agent automates meeting scheduling by sharing availability and booking slots without back-and-forth.",
-  "entrypoint": "entrypoint.py",
   "service_provider_code": "calendly",
-  "icon": "calendly.svg"
+  "icon": "calendly.svg",
+  "mcp_url": "https://mcp.calendly.com",
+  "server_type": "sse"
 }
-

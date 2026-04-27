@@ -27,15 +27,16 @@ It is intentionally **implementation-agnostic**:
 - [What you can build](#what-you-can-build)
 - [Folder contract (what must exist on disk)](#1-folder-contract-what-must-exist-on-disk)
 - [AI Agent folder layout (supported)](#11-ai-agent-folder-layout-supported)
-- [Create a new AI Agent](#2-create-a-new-ai-agent-recommended-workflow)
-- [Dependencies inside your agent class](#21-dependencies-inside-your-agent-class-do-not-skip)
-- [Multi-step plans & placeholders](#22-multi-step-plans-dependency-placeholders-and-raise-a-step-behavior-critical)
-- [When does an agent need a Service Provider?](#3-when-does-an-agent-need-a-service-provider-auth)
-- [Create a new Service Provider](#4-create-a-new-service-provider-auth-provider-catalog)
-- [Drop-in folder enablement checklist](#5-drop-in-folder-enablement-checklist-what-a-user-does)
-- [Safe update rules](#6-safe-update-rules-production)
-- [Common causes of “plugin not loading”](#7-common-causes-of-plugin-not-loading)
-- [Copy-from-real-examples](#8-copy-from-real-examples-already-in-this-repo)
+- [Create a new MCP Agent (fastest path)](#2-create-a-new-mcp-agent-fastest-path)
+- [Create a new Python Agent](#3-create-a-new-python-agent-recommended-workflow)
+- [Dependencies inside your agent class](#31-dependencies-inside-your-agent-class-do-not-skip)
+- [Multi-step plans & placeholders](#32-multi-step-plans-dependency-placeholders-and-raise-a-step-behavior-critical)
+- [When does an agent need a Service Provider?](#4-when-does-an-agent-need-a-service-provider-auth)
+- [Create a new Service Provider](#5-create-a-new-service-provider-auth-provider-catalog)
+- [Drop-in folder enablement checklist](#6-drop-in-folder-enablement-checklist-what-a-user-does)
+- [Safe update rules](#7-safe-update-rules-production)
+- [Common causes of “plugin not loading”](#8-common-causes-of-plugin-not-loading)
+- [Copy-from-real-examples](#9-copy-from-real-examples-already-in-this-repo)
 
 ### Quick glossary
 
@@ -64,6 +65,16 @@ This is done by:
 - Ensuring the provider exists under `service-providers/<code>/provider.json`
 - Connecting the provider from the UI (one-time per user/company as your UI supports)
 
+### 3) MCP Agent — hosted MCP server (fastest path, no Python required)
+
+Use this when the vendor already runs a hosted MCP server (e.g. `https://mcp.example.com`).
+
+You only need **2 files** (`plugin.json` + icon). No Python code at all. The platform’s built-in `GenericMCPAgentTool` handles the connection, OAuth token injection, and tool discovery automatically.
+
+Add `"type": "mcp_wrapper"` with `mcp_url` and `server_type` to `plugin.json` — no `entrypoint` field needed.
+
+If you need custom pre/post-processing logic, you can still add your own `entrypoint.py` — the generic path is skipped and your custom code takes over.
+
 ---
 
 ## 1) Folder contract (what must exist on disk)
@@ -79,7 +90,16 @@ Your deployment must be configured so:
 
 After adding or changing folders/files, **restart** the relevant running processes and then **refresh the UI**. (Exact component names depend on your deployment.)
 
-### Required layout for every AI Agent
+### Required layout — MCP Agent (hosted MCP server, no Python needed)
+
+```text
+ai-agents/
+  <agent_code>/
+    plugin.json        ← declares mcp_url + server_type, no entrypoint field
+    icon.svg           ← optional but recommended
+```
+
+### Required layout — Python Agent (custom logic)
 
 ```text
 ai-agents/
@@ -145,7 +165,112 @@ AI agents reference a provider **only** via `plugin.json`:
 
 ---
 
-## 2) Create a new AI Agent (recommended workflow)
+## 2) Create a new MCP Agent (fastest path)
+
+Use this when the vendor runs a hosted MCP server over HTTP or SSE. No Python files required.
+
+### Step A: create the agent folder
+
+```text
+ai-agents/
+  <agent_code>/
+    plugin.json
+    icon.svg      ← optional
+```
+
+### Step B: write `plugin.json`
+
+```json
+{
+  "plugin_id": "<agent_code>",
+  "app_codes": ["<agent_code>"],
+  "type": "mcp_wrapper",
+  "display_name": "Human Friendly Name",
+  "description": "One sentence: what this agent does.",
+  "service_provider_code": "<provider_code>",
+  "icon": "icon.svg",
+  "mcp_url": "https://mcp.example.com",
+  "server_type": "http"
+}
+```
+
+**Field reference:**
+
+| Field | Required | Notes |
+|---|---|---|
+| `plugin_id` | yes | Unique across all agents. Match the folder name. |
+| `app_codes` | yes | Array with one entry (same as `plugin_id`). |
+| `type` | yes | Must be `"mcp_wrapper"`. |
+| `display_name` | yes | Shown in the UI. |
+| `description` | yes | Used as the tool description the LLM sees. |
+| `mcp_url` | yes | Base URL of the hosted MCP server. |
+| `server_type` | yes | `"http"` (streamable HTTP, recommended) or `"sse"`. |
+| `service_provider_code` | if auth needed | Links to `service-providers/<code>/provider.json`. |
+| `icon` | no | Relative path to an SVG/PNG in the same folder. |
+| `entrypoint` | no | Omit for the generic path. Add only if you need custom logic. |
+
+**`server_type` guide:**
+- Use `"http"` for MCP servers that support the streamable HTTP transport (most modern hosted servers).
+- Use `"sse"` for older MCP servers that only support Server-Sent Events.
+
+### Step C: create the Service Provider (if auth needed)
+
+If the MCP server requires an OAuth token or API key, also add a provider under `service-providers/<provider_code>/provider.json`. See [Section 5](#5-create-a-new-service-provider-auth-provider-catalog).
+
+### That's it — no Python files needed
+
+The platform detects `type: "mcp_wrapper"` + `mcp_url` and no `entrypoint`, and automatically uses the built-in `GenericMCPAgentTool` which:
+
+- Resolves the OAuth/API token from the connected credential
+- Connects to the MCP server with an `Authorization: Bearer <token>` header
+- Discovers all tools the MCP server exposes
+- Routes the user query to the appropriate tool
+
+### Adding custom logic (optional override)
+
+If you need pre/post-processing, custom token handling, or special MCP config, add `"entrypoint": "entrypoint.py"` to `plugin.json` and create your own `entrypoint.py`:
+
+```python
+from __future__ import annotations
+from typing import Any, Dict, Optional
+from llm_tools.generic_mcp_agent_tool import GenericMCPAgentTool
+
+async def create_tool_agent(
+    *,
+    app_code: str,
+    app_config: Dict[str, Any],
+    llm_provider: Any,
+    token: str,
+    user_id: int,
+    company_id: Optional[str] = None,
+    agent_id: Optional[str] = None,
+):
+    # Customise mcp_url, server_type, or subclass GenericMCPAgentTool as needed.
+    agent = GenericMCPAgentTool(
+        mcp_url="https://mcp.example.com",
+        server_type="http",
+        tool_description="What this agent does.",
+        llm_provider=llm_provider,
+        token=token,
+        user_id=user_id,
+        company_id=company_id,
+        agent_id=agent_id or "",
+        app_config=app_config or {},
+    )
+    await agent.initialize()
+    return agent
+```
+
+### Real examples
+
+| Agent | Folder | MCP URL | server_type |
+|---|---|---|---|
+| Apify | `ai-agents/apify/` | `https://mcp.apify.com` | `http` |
+| Calendly | `ai-agents/calendly/` | `https://mcp.calendly.com` | `sse` |
+
+---
+
+## 3) Create a new Python Agent (recommended workflow)
 
 ### Step A: choose your agent code
 
@@ -211,8 +336,9 @@ Add `service_provider_code` and (optionally) an icon.
 
 - **`plugin_id` must be unique** across all agent folders.
 - **`app_codes` must be a non-empty array** (strings).
-- **`type` must be `python_tool_agent`** for Python agents.
-- **`entrypoint` must point to a file that exists** in the same folder.
+- **`type`** must be `"python_tool_agent"` for Python agents or `"mcp_wrapper"` for hosted MCP agents.
+- **`entrypoint` must point to a file that exists** — required for `python_tool_agent`; optional for `mcp_wrapper` (omit it to use the generic path).
+- **`mcp_url` is required** when `type` is `"mcp_wrapper"` and no `entrypoint` is set.
 - If you add `service_provider_code`, the provider must exist under `service-providers/<provider_code>/provider.json`.
 
 ### Step C: create `entrypoint.py` (plugin factory)
@@ -338,7 +464,7 @@ class <AgentClassName>(BaseToolAgent):
 
 ---
 
-## 2.1) Dependencies inside your agent class (do not skip)
+## 3.1) Dependencies inside your agent class (do not skip)
 
 Every agent instance is constructed by `entrypoint.py:create_tool_agent(...)`. The platform passes a consistent set of dependencies you must handle safely.
 
@@ -402,7 +528,7 @@ Your `run(...)` method receives:
 
 ---
 
-## 2.2) Multi-step plans, dependency placeholders, and “raise a step” behavior (critical)
+## 3.2) Multi-step plans, dependency placeholders, and “raise a step” behavior (critical)
 
 Many real tools are executed as **multi-step plans** (for example: search → choose an id → take an action). The runner can pass outputs from earlier steps into later steps, but it can only do that if your tool returns **machine-readable results** with stable identifiers.
 
@@ -510,7 +636,7 @@ Avoid returning only a large blob with no ids—future steps can’t reference i
 
 ---
 
-## 3) When does an agent need a Service Provider (auth)?
+## 4) When does an agent need a Service Provider (auth)?
 
 An agent needs a Service Provider when it must call an external service on behalf of a user/company and therefore needs a connection step from the UI.
 
@@ -527,7 +653,7 @@ After the UI connection is completed, the platform will provide the agent what i
 
 ---
 
-## 4) Create a new Service Provider (auth provider catalog)
+## 5) Create a new Service Provider (auth provider catalog)
 
 Service Providers are meant to be **shared** across many agents (example: multiple agents can reuse `google`).
 
@@ -658,7 +784,7 @@ Example template for `custom`:
 
 ---
 
-## 5) “Drop-in folder” enablement checklist (what a user does)
+## 6) “Drop-in folder” enablement checklist (what a user does)
 
 This is the process for someone who wants to add your new agent/provider by copying folders.
 
@@ -718,7 +844,7 @@ After selecting the credential, click **Save** so the agent uses that credential
 
 ---
 
-## 6) Safe update rules (production)
+## 7) Safe update rules (production)
 
 When updating an existing agent:
 
@@ -735,41 +861,60 @@ When updating a provider:
 
 ---
 
-## 7) Common causes of “plugin not loading”
+## 8) Common causes of “plugin not loading”
 
 - **Invalid JSON** (trailing commas, comments).
-- **Missing `entrypoint.py`** or wrong `entrypoint` name in `plugin.json`.
+- **Missing `entrypoint.py`** — for `python_tool_agent` the file must exist; for `mcp_wrapper` it is only required if you set `”entrypoint”` in `plugin.json`.
+- **Missing `mcp_url`** — `mcp_wrapper` plugins without an `entrypoint` must declare `mcp_url`; without it the plugin is skipped.
+- **Wrong `server_type`** — use `”http”` for streamable HTTP servers and `”sse”` for SSE-only servers; a mismatch will cause a connection failure.
 - **Duplicate `plugin_id`** across agent folders.
 - **Import errors** in Python files (prefer relative imports in the agent folder).
 - **Auth mismatch**: `service_provider_code` points to a provider that does not exist.
 
 ---
 
-## 8) Copy-from-real-examples (already in this repo)
+## 9) Copy-from-real-examples (already in this repo)
 
 If you want working reference folders to copy (with “how it works” notes), start with these:
 
-- **Web Search (minimal, no auth)**  
-  - Folder: `ai-agents/websearch/`  
-  - Working notes: `ai-agents/websearch/EXAMPLE.md`  
+### MCP Agent examples (type: `mcp_wrapper`)
+
+- **Apify (HTTP MCP, OAuth2, no Python files)**
+  - Folder: `ai-agents/apify/`
+  - Provider: `service-providers/apify/`
+  - Best for: your first MCP agent — shows the minimal 2-file layout (`plugin.json` + `icon.svg`)
+
+- **Calendly (SSE MCP, OAuth2, no Python files)**
+  - Folder: `ai-agents/calendly/`
+  - Provider: `service-providers/calendly/`
+  - Best for: SSE transport variant of the same generic pattern
+
+### Python Agent examples (type: `python_tool_agent`)
+
+- **Web Search (minimal, no auth)**
+  - Folder: `ai-agents/websearch/`
+  - Working notes: `ai-agents/websearch/EXAMPLE.md`
   - Best for: your first simple tool (`plugin.json` + `entrypoint.py` + one tool file)
 
-- **SQL Server (config-heavy, permissions-aware)**  
-  - Folder: `ai-agents/sqlserver/`  
-  - Working notes: `ai-agents/sqlserver/EXAMPLE.md`  
+- **SQL Server (config-heavy, permissions-aware)**
+  - Folder: `ai-agents/sqlserver/`
+  - Working notes: `ai-agents/sqlserver/EXAMPLE.md`
   - Best for: tools that rely on `app_config` for connection/settings and must enforce safe modes (read-only vs write)
 
-- **Memory (production module layout)**  
-  - Folder: `ai-agents/memory/`  
-  - Working notes: `ai-agents/memory/EXAMPLE.md`  
+- **Memory (production module layout)**
+  - Folder: `ai-agents/memory/`
+  - Working notes: `ai-agents/memory/EXAMPLE.md`
   - Best for: larger agents that should be split into multiple modules (clients, scoring, tagging, utilities) but still follow the same plugin contract
 
-- **Gmail (provider-authenticated agent)**  
-  - Folder: `ai-agents/gmail/` (uses `service_provider_code`)  
+- **Gmail (provider-authenticated agent)**
+  - Folder: `ai-agents/gmail/` (uses `service_provider_code`)
   - Best for: any OAuth/token-connected tool that needs `ConnectedServiceToolAgent` patterns (not-connected handling, refresh-on-401, retry-once)
 
-- **Provider definitions (shared auth catalog)**  
-  - `service-providers/google/`, `service-providers/microsoft/`, `service-providers/github/`
+### Provider definitions (shared auth catalog)
+
+- `service-providers/google/`, `service-providers/microsoft/`, `service-providers/github/`
+- `service-providers/apify/` — OAuth2 with `is_client_registration_required: true`
+- `service-providers/calendly/` — OAuth2 with MCP scopes
 
 **Worked example (recommended):**
 
