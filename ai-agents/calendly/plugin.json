@@ -7,5 +7,5 @@
   "service_provider_code": "calendly",
   "icon": "calendly.svg",
   "mcp_url": "https://mcp.calendly.com",
-  "server_type": "sse"
+  "server_type": "http"
 }

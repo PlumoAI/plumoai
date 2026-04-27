@@ -7,7 +7,7 @@
   ],
   "config": {
     "scope": "mcp api_access",
-    "authorization_endpoint": "hhttps://auth.lusha.com/oauth-ui/authorize",
+    "authorization_endpoint": "https://auth.lusha.com/oauth-ui/authorize",
     "token_endpoint": "https://auth.lusha.com/oauth/token",
     "register_endpoint":"https://auth.lusha.com/oauth/register",
     "access_type": "offline",
