@@ -261,7 +261,7 @@ services:
     restart: unless-stopped
     healthcheck:
       # Python image: use python urllib to check the port; reads PORT env var dynamically
-      test: ["curl -LsSf https://astral.sh/uv/install.sh | sh","CMD-SHELL", "python -c \"import urllib.request,os; urllib.request.urlopen('http://localhost:'+os.environ.get('PORT','3002')+'/', timeout=5)\" 2>/dev/null && exit 0 || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request,os; urllib.request.urlopen('http://localhost:'+os.environ.get('PORT','3002')+'/', timeout=5)\" 2>/dev/null && exit 0 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
