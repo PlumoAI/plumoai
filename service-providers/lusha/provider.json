@@ -1,0 +1,20 @@
+{
+  "name": "Lusha",
+  "code": "lusha",
+  "auth_type": "oauth2",
+  "required_fields": [
+   
+  ],
+  "config": {
+    "scope": "mcp api_access",
+    "authorization_endpoint": "hhttps://auth.lusha.com/oauth-ui/authorize",
+    "token_endpoint": "https://auth.lusha.com/oauth/token",
+    "register_endpoint":"https://auth.lusha.com/oauth/register",
+    "access_type": "offline",
+    "grant_types": ["authorization_code",  "refresh_token"],
+    "registration_url":"https://auth.lusha.com/oauth/register",
+    "is_client_registration_required": true
+  },
+  "icon": "./lusha.svg"
+}
+

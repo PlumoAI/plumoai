@@ -1,0 +1,12 @@
+{
+  "name": "Apollo.io",
+  "code": "apollo",
+  "auth_type": "custom",
+  "required_fields": [
+    {"key": "APOLLO_IO_API_KEY", "type": "text", "label": "API Key", "required": true, "placeholder": "Chroma Vector Store"}
+  ],
+  "config": {
+  },
+  "icon": "./apolloio.svg"
+}
+

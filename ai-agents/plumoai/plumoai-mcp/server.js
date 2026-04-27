@@ -786,6 +786,14 @@ server.addTool({
         isIncludeEmptyFields: z.boolean().optional().describe("Optional. When true, every record includes all field keys (with null where there is no value)."),
         page: z.number().int().positive().optional().describe("Optional. Page number for pagination (1-based). If omitted, server default is used."),
         limit: z.number().int().positive().optional().describe("Optional. Page size for pagination. If omitted, server default is used."),
+        select_fields: z
+            .array(z.string().min(1))
+            .optional()
+            .describe("Optional. Reduce payload by returning ONLY these output fields. Field names must match the post-transformation keys (e.g. 'record_id', 'Name', 'Primary Email'). `record_id` is always included for usability."),
+        omit_fields: z
+            .array(z.string().min(1))
+            .optional()
+            .describe("Optional. Reduce payload by removing these output fields. Field names must match the post-transformation keys. `record_id` is never omitted."),
     }),
     canAccess(auth) {
         return checkAccess(auth);
@@ -832,12 +840,49 @@ server.addTool({
                 }
                 return out;
             });
+            const normalizeFieldKey = (s) => s.trim();
+            const selectSet = Array.isArray(args.select_fields) && args.select_fields.length > 0
+                ? new Set(args.select_fields.map(normalizeFieldKey).filter((k) => k.length > 0))
+                : null;
+            const omitSet = Array.isArray(args.omit_fields) && args.omit_fields.length > 0
+                ? new Set(args.omit_fields.map(normalizeFieldKey).filter((k) => k.length > 0))
+                : null;
+            const finalRecords = selectSet || omitSet
+                ? transformedRecords.map((rec) => {
+                    const alwaysKeep = new Set(["record_id"]);
+                    const out = {};
+                    if (selectSet) {
+                        for (const key of alwaysKeep) {
+                            if (Object.prototype.hasOwnProperty.call(rec, key))
+                                out[key] = rec[key];
+                        }
+                        for (const key of selectSet) {
+                            if (alwaysKeep.has(key))
+                                continue;
+                            if (Object.prototype.hasOwnProperty.call(rec, key))
+                                out[key] = rec[key];
+                        }
+                        return out;
+                    }
+                    // omitSet only
+                    for (const key of Object.keys(rec)) {
+                        if (alwaysKeep.has(key)) {
+                            out[key] = rec[key];
+                            continue;
+                        }
+                        if (omitSet?.has(key))
+                            continue;
+                        out[key] = rec[key];
+                    }
+                    return out;
+                })
+                : transformedRecords;
             return {
                 type: "text",
                 text: JSON.stringify({
                     success: true,
                     message: "Records retrieved successfully",
-                    data: transformedRecords,
+                    data: finalRecords,
                 }),
             };
         }
@@ -1083,9 +1128,42 @@ server.addTool({
                     Authorization: `Bearer ${session?.user_access_token}---CompanyID---${session?.companyId}`,
                 },
             });
+            const raw = response.data?.data ?? response.data ?? {};
+            const fields = raw?.fields ?? [];
+            const records = [raw?.record].filter((it) => it !== null && it !== undefined);
+            const keyToFieldName = {};
+            for (const f of fields) {
+                const name = f.field_name ?? "";
+                if (f.field_id)
+                    keyToFieldName[f.field_id] = name;
+                if (f.field_key)
+                    keyToFieldName[f.field_key] = name;
+            }
+            const transformedRecords = records.map((rec) => {
+                const out = {};
+                for (const key of Object.keys(rec)) {
+                    const newKey = keyToFieldName[key] ?? key;
+                    out[newKey] = rec[key];
+                }
+                return out;
+            });
+            const finalRecords = transformedRecords;
+            if (finalRecords.length === 0) {
+                return {
+                    type: "text",
+                    text: JSON.stringify({
+                        success: false,
+                        message: "No records found",
+                    }),
+                };
+            }
             return {
                 type: "text",
-                text: JSON.stringify(response.data),
+                text: JSON.stringify({
+                    success: true,
+                    message: "Records retrieved successfully",
+                    data: finalRecords[0],
+                }),
             };
         }
         catch (error) {

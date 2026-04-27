@@ -137,6 +137,69 @@ def _mask_for_log(s: Optional[str], visible: int = 4) -> str:
         return "***"
     return f"{s[:visible]}...{s[-visible:]}"
 
+def _redact_secrets_for_log(value: Any) -> Any:
+    """
+    Best-effort redaction for logs (prevents leaking tokens / raw email bodies).
+    """
+    SENSITIVE_KEY_TOKENS = (
+        "token",
+        "secret",
+        "password",
+        "passwd",
+        "pwd",
+        "api_key",
+        "apikey",
+        "api-key",
+        "access_token",
+        "refresh_token",
+        "authorization",
+        "bearer",
+        "private",
+        "key",
+        "client_secret",
+        "service_credential",
+        "credentials",
+        # gmail-specific payloads that can contain lots of sensitive content
+        "raw",
+        "mime",
+        "body",
+        "htmlbody",
+        "snippet",
+        "payload",
+    )
+
+    def _looks_sensitive_key(k: str) -> bool:
+        kl = (k or "").lower()
+        return any(t in kl for t in SENSITIVE_KEY_TOKENS)
+
+    def _mask_str(s: str) -> str:
+        ss = (s or "").strip()
+        if not ss:
+            return ss
+        if len(ss) >= 24:
+            return ss[:6] + "…" + ss[-4:]
+        return "***"
+
+    if isinstance(value, dict):
+        out: Dict[str, Any] = {}
+        for k, v in value.items():
+            if isinstance(k, str) and _looks_sensitive_key(k):
+                out[k] = _mask_str(str(v)) if v is not None else None
+            else:
+                out[k] = _redact_secrets_for_log(v)
+        return out
+    if isinstance(value, list):
+        return [_redact_secrets_for_log(v) for v in value[:50]]
+    if isinstance(value, str):
+        # Avoid dumping whole email threads/bodies into logs
+        if len(value) > 1200:
+            return value[:600] + "…<truncated>…" + value[-120:]
+        # Mask long strings that often are tokens/ids
+        if len(value.strip()) >= 48:
+            return _mask_str(value)
+        return value
+    return value
+
 
 def _validate_gmail_search(q: Optional[str]) -> bool:
     if not q or not isinstance(q, str):
@@ -2453,6 +2516,20 @@ JSON array:"""
         tool_args: Optional[Dict[str, Any]] = None,
     ) -> AsyncGenerator[Dict, None]:
         try:
+            try:
+                # Log *everything* the Gmail tool receives as context (redacted).
+                logger.info(
+                    "GmailTool.run: session_id=%s user_id=%s company_id=%s tool_args=%s provided_data=%s user_query=%s",
+                    session_id,
+                    getattr(self, "user_id", None),
+                    getattr(self, "company_id", None),
+                    json.dumps(_redact_secrets_for_log(tool_args or {}), default=str),
+                    json.dumps(_redact_secrets_for_log(provided_data), default=str),
+                    json.dumps(_redact_secrets_for_log(user_query or ""), default=str),
+                )
+            except Exception:
+                pass
+
             if not self.access_token:
                 yield event(AgentEvent.RESULT, {
                     "success": False,
@@ -2466,6 +2543,15 @@ JSON array:"""
             action_result = await self._decide_action(user_query, provided_data, tool_args=tool_args)
             action_type = action_result.get("action") or "list"
             params = action_result.get("params") or {}
+            try:
+                # Gmail-local "intent": the chosen action + params.
+                logger.info(
+                    "GmailTool.intent: action=%s params=%s",
+                    action_type,
+                    json.dumps(_redact_secrets_for_log(params), default=str),
+                )
+            except Exception:
+                pass
 
             write_actions = (
                 "send", "draft", "reply_draft", "compose_draft", "schedule", "update_draft", "delete_draft", "modify_labels",
@@ -2510,6 +2596,59 @@ JSON array:"""
                 return
 
             if action_type == "send":
+                # If body or subject is missing and intent is purely to send, insert an AI Writer
+                # step before this one so content is generated before the send executes.
+                _send_body = (params.get("body") or "").strip()
+                _send_subject = (params.get("subject") or "").strip()
+                _needs_writer = (
+                    not _send_body
+                    or self._is_placeholder_content(_send_body)
+                    or not _send_subject
+                    or self._is_placeholder_content(_send_subject)
+                )
+                if _needs_writer:
+                    _self_name = (
+                        self.app_config.get("custom_name")
+                        or self.app_config.get("app_name")
+                        or "Gmail"
+                    )
+                    _to = (params.get("to") or "").strip()
+                    _writer_hint = _send_subject or _to or "the recipient"
+                    _writer_query = (
+                        f"Write a complete professional email"
+                        + (f" to {_to}" if _to else "")
+                        + (f" with subject '{_send_subject}'" if _send_subject else "")
+                        + f". Original request: {(user_query or '').strip()}"
+                        + ". Include a clear subject line and full body. Output subject and body."
+                    )
+                    _seed: List[Any] = []
+                    if isinstance(provided_data, list):
+                        _seed.extend(x for x in provided_data[:30] if isinstance(x, (dict, list, str, int, float, bool)) or x is None)
+                    elif provided_data is not None:
+                        _seed.append(provided_data)
+                    yield event(AgentEvent.THOUGHT, f"Email content missing — inserting AI Writer step before send.")
+                    yield event(AgentEvent.FINAL, {
+                        "_expand_plan": True,
+                        "router_steps": [
+                            {
+                                "top_level": True,
+                                "tool_name": "AI Writer",
+                                "action": f"Write email: {_writer_hint[:60]}",
+                                "query": _writer_query,
+                                "arguments": {"_provided_data_seed": _seed} if _seed else {},
+                            },
+                            {
+                                "top_level": True,
+                                "tool_name": _self_name,
+                                "action": f"Send email" + (f" to {_to}" if _to else ""),
+                                "query": user_query,
+                                "arguments": {},
+                            },
+                        ],
+                        "success": True,
+                        "response": "Email content missing — AI Writer step inserted to generate subject and body before sending.",
+                    })
+                    return
                 yield event(AgentEvent.PLAN, "Sending the email.")
                 result = await self._do_send(user_query, params)
                 yield event(AgentEvent.RESULT, result)

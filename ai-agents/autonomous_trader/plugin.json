@@ -1,0 +1,22 @@
+{
+  "plugin_id": "autonomous_trader",
+  "app_codes": ["autonomous_trader", "auto_trader"],
+  "type": "python_tool_agent",
+  "display_name": "Self-Driving Trader",
+  "description": "Standalone self-driving trading agent (paper-only): playbooks + autonomous loop (research → risk → evaluation → learning). No external execution/signal services required.",
+  "icon": "candlestick.svg",
+  "required_fields": [
+    { "key": "default_mode", "type": "text", "label": "Default Mode (paper)" },
+    { "key": "allow_live_trading", "type": "text", "label": "Allow Live Trading (ignored; standalone mode)" },
+    { "key": "max_orders_per_cycle", "type": "number", "label": "Max Orders Per Cycle" },
+    { "key": "max_notional_per_order", "type": "number", "label": "Max Notional Per Order (0 = disabled)" },
+    { "key": "account_value", "type": "number", "label": "Account Value (paper)" },
+    { "key": "risk_per_trade_pct", "type": "number", "label": "Risk Per Trade % (e.g. 1)" },
+    { "key": "stop_loss_pct", "type": "number", "label": "Stop Loss % (e.g. 2)" },
+    { "key": "take_profit_rr", "type": "number", "label": "Take Profit R:R (e.g. 2)" },
+    { "key": "data_source", "type": "text", "label": "Data Source (stooq/binance, default: stooq)" }
+  ],
+  "entrypoint": "entrypoint.py",
+  "auto_attach_to_all_agents": false
+}
+

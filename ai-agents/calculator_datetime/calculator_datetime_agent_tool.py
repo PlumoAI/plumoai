@@ -87,7 +87,9 @@ class CalculatorDatetimeAgentTool(BaseToolAgent):
     TOOL_NAME = "Calculator & DateTime"
     APP_CODE = "calculator_datetime"
 
-    TOOL_DESCRIPTION = """Calculator & DateTime: math arithmetic and date/time operations (always available). Accepts JSON or query-string from planner (e.g. {"operation":"current_datetime","format":"iso8601"} or operation=parse&date=tomorrow).
+    TOOL_DESCRIPTION = """MANDATORY: Always call this tool FIRST whenever the task requires the current date/time, or any date/time calculation relative to today (tomorrow, next week, N days from now, scheduling, deadlines, time differences, business days, etc.). Also handles arithmetic and logic.
+
+Calculator & DateTime: math arithmetic and date/time operations (always available). Accepts JSON or query-string from planner (e.g. {"operation":"current_datetime","format":"iso8601"} or operation=parse&date=tomorrow).
 
 MATH: operation="arithmetic", expression or a,b,op. Functions: sqrt, log, sin, cos, etc.
 
@@ -356,6 +358,9 @@ User message: """
         prompt += (user_query or "").strip()[:600]
         if tool_args:
             prompt += "\n\nAdditional context (merge if relevant): " + json.dumps({k: v for k, v in tool_args.items() if k not in ("step_action",)})[:300]
+        _ctx = getattr(self, "_agent_context", "")
+        if _ctx:
+            prompt += f"\n\nAgent context (guidelines from the main agent — use for disambiguation only):\n{_ctx[:400]}"
         prompt += "\n\nJSON:"
         out = await self._llm_generate(prompt, max_tokens=800)
         if not out:
@@ -979,11 +984,14 @@ JSON:"""
         provided_data: Optional[Any] = None,
         session_id: Optional[str] = None,
         tool_args: Optional[Dict[str, Any]] = None,
+        agent_context: Optional[str] = None,
     ) -> AsyncGenerator[Dict, None]:
         """
         Run calculator or date/time operation. When params are not fully specified,
         uses LLM to interpret natural language (user_query) into structured operation and params.
+        agent_context: identity/guidelines from the main agent, injected by the runner.
         """
+        self._agent_context = (agent_context or "").strip()[:800]
         try:
             args = dict(tool_args or {})
             operation = (args.get("operation") or "").strip().lower()

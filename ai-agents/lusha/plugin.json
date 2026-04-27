@@ -1,0 +1,11 @@
+{
+  "plugin_id": "lushah",
+  "app_codes": ["lusha"],
+  "type": "mcp_wrapper",
+  "display_name": "Lusha",
+  "description": "Lusha AI Agent allows this AI Digital Employee to securely connect with Lusha and interact with contact data, company intelligence, enrichment, and credits using natural language. The agent can read and write data strictly based on the permissions granted to the connected Lusha credentials while remaining compliant with platform policies.",
+  "entrypoint": "entrypoint.py",
+  "service_provider_code": "lusha",
+  "icon": "lusha.svg"
+}
+

@@ -6,7 +6,6 @@
   "description": "Search company and employee knowledge base sources.",
   "entrypoint": "entrypoint.py",
   "version": "0.1.0",
-  "core_min_version": "0.1.0",
-  "auto_attach_to_all_agents": true
+  "core_min_version": "0.1.0"
 }
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.services.app_agents.base_tool_agent import BaseToolAgent
+from backend.services.ai_agents.base_tool_agent import BaseToolAgent
 
 """
 Knowledgebase Search Tool  —  self-driven, profile-aware

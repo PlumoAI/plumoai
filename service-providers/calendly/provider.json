@@ -1,0 +1,20 @@
+{
+  "name": "Calendly",
+  "code": "Calendly",
+  "auth_type": "oauth2",
+  "required_fields": [
+   
+  ],
+  "config": {
+    "scope": "mcp:scheduling:read mcp:scheduling:write",
+    "authorization_endpoint": "https://calendly.com/oauth/authorize",
+    "token_endpoint": "https://calendly.com/oauth/token",
+    "register_endpoint":"https://calendly.com/oauth/register",
+    "access_type": "offline",
+    "grant_types": ["authorization_code"],
+    "registration_url":"https://calendly.com/oauth/register",
+    "is_client_registration_required": true
+  },
+  "icon": "./calendly.svg"
+}
+

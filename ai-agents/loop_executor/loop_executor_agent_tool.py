@@ -277,9 +277,51 @@ DO NOT use for single-item work unless you explicitly want step expansion."""
                 if v
             ) and len(obj) <= 8:
                 shared_context.append(obj)
+            # Tool result wrapper: any dict with a "success" key is a tool's response object
+            # (e.g. Calendly scheduling link, API result). Never an entity to iterate over.
+            elif "success" in keys:
+                shared_context.append(obj)
             else:
                 # Default: treat as an entity item to loop over
                 items.append(obj)
+
+        # Post-pass: structural outlier detection via Jaccard key-set similarity.
+        # If items contains dicts with heterogeneous schemas, singletons whose key-set
+        # has near-zero overlap with every other item are reference data (e.g. a Calendly
+        # scheduling link sitting alongside CRM contacts), not entity rows.
+        # Guard: only reclassify if it does NOT remove all dict items from the list.
+        dict_item_positions = [(i, obj) for i, obj in enumerate(items) if isinstance(obj, dict)]
+        if len(dict_item_positions) >= 2:
+            to_move: set = set()
+            for idx_a, (pos_a, obj_a) in enumerate(dict_item_positions):
+                keys_a = set(obj_a.keys())
+                max_jaccard = 0.0
+                for idx_b, (pos_b, obj_b) in enumerate(dict_item_positions):
+                    if idx_a == idx_b:
+                        continue
+                    keys_b = set(obj_b.keys())
+                    union = keys_a | keys_b
+                    if not union:
+                        continue
+                    jaccard = len(keys_a & keys_b) / len(union)
+                    if jaccard > max_jaccard:
+                        max_jaccard = jaccard
+                # Outlier: less than 20% key-set overlap with every other item
+                if max_jaccard < 0.2:
+                    to_move.add(pos_a)
+            # Only apply if at least one dict item stays as an entity row
+            if to_move and len(to_move) < len(dict_item_positions):
+                new_items: List[Any] = []
+                for i, obj in enumerate(items):
+                    if i in to_move:
+                        shared_context.append(obj)
+                        logger.info(
+                            "🔁 Structural outlier → shared_context (Jaccard<0.2 with all peers): keys=%s",
+                            list(obj.keys())[:8],
+                        )
+                    else:
+                        new_items.append(obj)
+                items = new_items
 
         logger.info(
             "🔁 _split_items_and_context: %d items | %d shared-context objects",
@@ -307,7 +349,7 @@ DO NOT use for single-item work unless you explicitly want step expansion."""
             current_item = items[item_index] if 0 <= item_index < len(items) else {}
             item_identity = self._describe_item(current_item, item_label)
 
-            for call in calls:
+            for call_pos, call in enumerate(calls):
                 tool_name = (call.get("tool_name") or "").strip()
                 call_query = call.get("query", user_query)
                 if not tool_name:
@@ -328,10 +370,18 @@ DO NOT use for single-item work unless you explicitly want step expansion."""
                 extra = call.get("tool_args") if isinstance(call.get("tool_args"), dict) else {}
                 arguments: Dict[str, Any] = dict(extra)
                 arguments["_provided_data_seed"] = seed
+                call_action = (call.get("action") or "").strip()
+                if not call_action:
+                    # Derive a short action from the first clause of the query (up to 50 chars)
+                    call_action = call_query.split(".")[0].split(",")[0].strip()[:50]
                 router_steps.append({
                     "top_level": True,
+                    # Parallelism metadata: runner uses these to build per-item dep chains
+                    # instead of a single all-siblings chain, enabling items to run in parallel.
+                    "_item_index": item_index,
+                    "_call_pos": call_pos,
                     "tool_name": tool_name,
-                    "action": f"[{item_index + 1}/{n_items}] {item_identity} — {tool_name}",
+                    "action": f"[{item_index + 1}/{n_items}] {item_identity} — {call_action}",
                     "query": call_query,
                     "arguments": arguments,
                 })
@@ -350,6 +400,7 @@ DO NOT use for single-item work unless you explicitly want step expansion."""
             arguments["_provided_data_seed"] = seed
             router_steps.append({
                 "top_level": True,
+                "_is_aggregate": True,
                 "tool_name": tool_name,
                 "action": f"[aggregate] {tool_name}",
                 "query": call_query,
@@ -481,6 +532,7 @@ Return ONLY valid JSON, no markdown, no explanation:
       "calls": [
         {{
           "tool_name": "<exact tool name from AVAILABLE TOOLS>",
+          "action": "<short verb phrase describing what this call does, e.g. 'Send email', 'Update CRM status', 'Create task'>",
           "query": "<complete, self-contained query for this item with real values injected>"
         }}
       ]
@@ -497,6 +549,7 @@ Return ONLY valid JSON, no markdown, no explanation:
 Rules:
 - item_label: use Name, email, title, or any human-readable identifier from the item
 - tool_name: must exactly match one of the AVAILABLE TOOLS
+- action: short verb phrase (3–6 words) saying what this call does, e.g. "Send email", "Update CRM status", "Create task"
 - query: must be a complete standalone instruction with real IDs/values, not references like "the record"
 - per_item_operations: one entry per item, in order. Empty [] if the task only needs an aggregate step.
 - aggregate_operations: only include if the task requires a post-loop action (e.g. send one summary, create a report). Otherwise []

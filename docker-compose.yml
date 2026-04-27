@@ -132,7 +132,6 @@ services:
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_SECURE: ${SMTP_SECURE:-}
       AUTH_BASE_ROUTE : /api/auth
-      LOG_LEVEL: ${LOG_LEVEL:-debug}
     secrets:
       - mysql_db
       - mysql_user
@@ -262,7 +261,7 @@ services:
     restart: unless-stopped
     healthcheck:
       # Python image: use python urllib to check the port; reads PORT env var dynamically
-      test: ["CMD-SHELL", "python -c \"import urllib.request,os; urllib.request.urlopen('http://localhost:'+os.environ.get('PORT','3002')+'/', timeout=5)\" 2>/dev/null && exit 0 || exit 1"]
+      test: ["curl -LsSf https://astral.sh/uv/install.sh | sh","CMD-SHELL", "python -c \"import urllib.request,os; urllib.request.urlopen('http://localhost:'+os.environ.get('PORT','3002')+'/', timeout=5)\" 2>/dev/null && exit 0 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -279,6 +278,7 @@ services:
       AUTH_URL: ${AUTH_URL:-http://auth:3000}
       COMPANY_URL: ${COMPANY_URL:-http://company:3001}
       PORT: ${PORT:-3002}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     networks:
       - internal   # talk to auth/company/db services
       - frontend   # reach external APIs (OpenRouter, OpenAI, etc.)
