@@ -1,5 +1,23 @@
+import asyncio
+import base64
+import hashlib
+import hmac
+import html
+import json
+import logging
+import os
+import re
+import uuid
+from datetime import datetime
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email import encoders
+import mimetypes
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
+from urllib.parse import urlencode
+
 import httpx
-from your_base_module import ConnectedServiceToolAgent  
 
 class OutlookAgentTool(ConnectedServiceToolAgent):
 
