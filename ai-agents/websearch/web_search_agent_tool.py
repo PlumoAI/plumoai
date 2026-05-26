@@ -37,6 +37,58 @@ def event(event_type: str, content: Any) -> Dict:
     }
 
 
+def _compact_citations(
+    citations: Any,
+    *,
+    max_items: int = 8,
+    max_url: int = 500,
+    max_title: int = 200,
+    max_snippet: int = 320,
+) -> List[Dict[str, str]]:
+    """
+    Provider citation objects often include huge page bodies. The main agent only
+    needs short references for UI + attribution; keep a small, bounded payload.
+    """
+    if not isinstance(citations, list) or not citations:
+        return []
+    out: List[Dict[str, str]] = []
+    for raw in citations[: max_items * 3]:
+        if len(out) >= max_items:
+            break
+        if not isinstance(raw, dict):
+            continue
+        url = ""
+        for k in ("url", "link", "href", "uri"):
+            v = raw.get(k)
+            if isinstance(v, str) and v.strip():
+                url = v.strip()[:max_url]
+                break
+        title = ""
+        for k in ("title", "name", "site", "source"):
+            v = raw.get(k)
+            if isinstance(v, str) and v.strip():
+                title = v.strip()[:max_title]
+                break
+        snippet = ""
+        for k in ("snippet", "description", "summary", "text", "content", "body"):
+            v = raw.get(k)
+            if isinstance(v, str) and v.strip():
+                snippet = v.strip().replace("\n", " ")[:max_snippet]
+                break
+        if not url and not title and not snippet:
+            continue
+        row: Dict[str, str] = {}
+        if title:
+            row["title"] = title
+        if url:
+            row["url"] = url
+        if snippet:
+            row["snippet"] = snippet
+        if row:
+            out.append(row)
+    return out
+
+
 class WebSearchAgentTool(BaseToolAgent):
     """
     Web Search agent: uses the connected LLM provider with web search enabled.
@@ -146,19 +198,20 @@ The tool uses the connected LLM with web search to find and synthesize an answer
                 yield event("final", {"success": False, "error": out["error"], "response": None})
                 return
 
+            answer = str(response).strip()
+            cites = _compact_citations(citations_list)
+            # Single answer field (avoid duplicating the same text as result+response in JSON).
             out = {
                 "success": True,
-                "query": query,
-                "result": response.strip(),
-                "response": response.strip(),
-                "citations": citations_list,
+                "query": query[:500],
+                "response": answer,
+                "citations": cites,
             }
             yield event("result", out)
             yield event("final", {
                 "success": True,
-                "response": response.strip(),
-                "result": out,
-                "citations": citations_list,
+                "response": answer,
+                "citations": cites,
             })
 
         except Exception as e:

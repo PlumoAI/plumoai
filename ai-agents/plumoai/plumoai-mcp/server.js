@@ -9,6 +9,41 @@ function plumoApiV1Base() {
 }
 const OAUTH_ME_TTL_MS = 60000;
 const oauthMeCache = new Map();
+const recordListFilterConditionSchema = z.object({
+    field_id: z.string().min(1).describe("Required encrypted field ID for addon filter conditions."),
+    field_datatype: z
+        .enum(["text", "team", "record", "user", "date", "datetime", "number"])
+        .describe("Filter datatype — must match the field type from project_table_fields. " +
+        "Per-type allowed operators: " +
+        "text → = (Equal To), <> (Not Equal To), like (Contains); " +
+        "team → in (Has any of), not in (Has none of); " +
+        "record → =, <>; " +
+        "user → =, <>; " +
+        "date → =, <>, >, <, >=, <=; " +
+        "datetime → =, <>, >, <, >=, <=; " +
+        "number → =, <>, >, <, >=, <=."),
+    field_operator: z
+        .enum(["=", "<>", "like", "in", "not in", ">", "<", ">=", "<="])
+        .describe("Filter operator sent to the query API. **Contains / substring on text:** always use `like` (do not use `=` for contains). " +
+        "For `like`, pass the plain substring in `search_value1` — do **not** wrap with `%` wildcards (the server strips `%` if present). " +
+        "UI label → value: Equal To → `=`, Not Equal To → `<>`, Contains → `like`, " +
+        "Has any of → `in`, Has none of → `not in`, " +
+        "Greater Than → `>`, Less Than → `<`, Greater Than Equal To → `>=`, Less Than Equal To → `<=`."),
+    search_value1: z
+        .string()
+        .describe("Primary filter value. For **contains** on a text field: set `field_operator` to `like` and put the plain substring here (no `%` wildcards)."),
+    search_value2: z
+        .string()
+        .optional()
+        .describe("Optional secondary filter value when the API expects an extra operand."),
+});
+const recordListFilterGroupSchema = z.lazy(() => z.object({
+    logical_operator: z.enum(["AND", "OR"]).describe("How to combine the nested conditions."),
+    conditions: z
+        .array(z.union([recordListFilterConditionSchema, recordListFilterGroupSchema]))
+        .min(1)
+        .describe("List of filter conditions or nested groups."),
+}));
 function buildFetchRecordsGuide(opts) {
     const w = opts?.workspace_name?.trim();
     const p = opts?.project_name?.trim();
@@ -19,20 +54,20 @@ function buildFetchRecordsGuide(opts) {
         ? `1. Call **project_list** (no parameters, or with workspace_id to filter). From the response, identify **project_id** of the project named **${p}**. Pass that \`project_id\` as-is into record_list.`
         : `1. Call the **project_list** tool (no parameters, or with workspace_id to filter).\n2. From the response, read \`data\` (array of projects).\n3. Pick the project you need and take its **\`project_id\`** value.\n4. Pass that string **as-is** into record_list's \`project_id\`.`;
     const tableStep = t
-        ? `1. Call **project_tables_list**(projectId) with the encrypted project_id from project_list. From the response, identify **table_id** of the table named **${t}**. Pass that \`table_id\` as-is into record_list. Omit to get records from all tables.`
-        : `1. Call **project_tables_list**(projectId) with the encrypted project_id from project_list.\n2. From the response, each table has **\`table_id\`** and **\`table_name\`**. Pass **\`table_id\`** as-is into record_list's \`table_id\`.\n3. **Omit** \`table_id\` to get records from all tables.`;
+        ? `1. Call **project_tables_list**(projectId) with the encrypted project_id from project_list. From the response, identify **table_id** of the table named **${t}**. Pass that \`table_id\` as-is into record_list (required).`
+        : `1. Call **project_tables_list**(projectId) with the encrypted project_id from project_list.\n2. From the response, each table has **\`table_id\`** and **\`table_name\`**. Pick the target table and pass its **\`table_id\`** as-is into record_list's \`table_id\` (required).`;
     const statusStep = s
         ? `1. Call **project_table_status_list**(projectId, tableId) or **record_list** once to get records with status info. From the response, identify **status_id** of the status named **${s}**. Use that \`status_id\` in record_list. **Omit** for all statuses.`
-        : `1. Call **record_list** once with \`project_id\` (and optional \`table_id\`); each record has **\`status_id\`** and **\`status_name\`**.\n2. Or use **project_table_status_list**(projectId, tableId) if it returns status IDs.\n3. Use one of those **\`status_id\`** values in a later record_list call. **Omit** for all statuses.`;
+        : `1. Call **record_list** once with \`project_id\` and \`table_id\`; each record has **\`status_id\`** and **\`status_name\`**.\n2. Or use **project_table_status_list**(projectId, tableId) if it returns status IDs.\n3. Use one of those **\`status_id\`** values in a later record_list call. **Omit** for all statuses.`;
     const flowProject = p
         ? `**project_list()** → Identify project_id of project **${p}** (encrypted).`
         : `**project_list()** → Choose project, note \`project_id\` (encrypted).`;
     const flowTable = t
-        ? `**(Optional) project_tables_list(projectId)** → Identify table_id of table **${t}** (encrypted).`
-        : `**(Optional) project_tables_list(projectId)** → Choose table, note \`table_id\` (encrypted).`;
+        ? `**project_tables_list(projectId)** → Identify table_id of table **${t}** (encrypted).`
+        : `**project_tables_list(projectId)** → Choose table, note \`table_id\` (encrypted).`;
     const flowStatus = s
         ? `**record_list(...)** → If filtering by status, use status_id of status **${s}** from project_table_status_list or a record.`
-        : `**record_list(project_id [, table_id] [, status_id] [, isIncludeEmptyFields])** → Get records. Use \`status_id\` from a record for a later filtered call. For narrowest result: \`project_id\` + \`table_id\` + \`status_id\`.`;
+        : `**record_list(project_id, table_id [, status_id] [, isIncludeEmptyFields])** → Get records. Use \`status_id\` from a record for a later filtered call. For narrowest result: \`project_id\` + \`table_id\` + \`status_id\`.`;
     const contextSection = hasNames
         ? `## Target entities (user-specified)
 
@@ -54,7 +89,7 @@ ${contextSection}## 1. Tool and API
 | Item | Value |
 |------|--------|
 | **Tool name** | \`record_list\` |
-| **API** | \`GET /api/v1/records\` |
+| **API** | \`POST /api/v1/records/query\` |
 | **Base URL** | \`${plumoApiV1Base()}/api\` |
 
 ---
@@ -64,11 +99,16 @@ ${contextSection}## 1. Tool and API
 | Parameter | Required | Type | Purpose |
 |-----------|----------|------|---------|
 | \`project_id\` | **Yes** | string (encrypted) | Which project's records to fetch. |
-| \`table_id\` | No | string (encrypted) | Filter by table/work item type. Omit for all tables. |
-| \`status_id\` | No | string (encrypted) | Filter records by workflow status. Omit for all statuses. |
+| \`table_id\` | **Yes** | string (encrypted) | Which table/work item type to fetch records from. |
+| \`status_id\` | No | string (encrypted) | Filter by **workflow status** only. Pass as this parameter — **not** inside \`filter\`. |
+| \`filter\` | No | object | Addon filter tree for custom fields (AND/OR). **Not** for workflow status (use \`status_id\`). |
 | \`isIncludeEmptyFields\` | No | boolean | If \`true\`, each record includes all field keys (with \`null\` where empty). |
 | \`page\` | No | number | Page number for pagination (1-based). |
 | \`limit\` | No | number | Page size (how many records per page). |
+| \`order\` | No | string | Sort order, for example \`modified_desc\`. |
+| \`loadPartialData\` | No | boolean | Whether to request partial record data from the query API. |
+| \`fieldsToDisplay\` | No | string[] | Encrypted field IDs or system field keys to include in the query response. |
+| \`title\` | No | string | Keyword search on record title; sent as \`"title": "<keyword>"\` in the query body. |
 
 All IDs are **encrypted strings**. Use them exactly as returned by the APIs; do not use numeric IDs for this endpoint.
 
@@ -86,9 +126,9 @@ ${projectStep}
 
 ---
 
-### 3.2 \`table_id\` (optional)
+### 3.2 \`table_id\` (required)
 
-**Purpose:** Restricts records to one table (work item type), e.g. "Outreach", "Tasks", "Leads".
+**Purpose:** Identifies the table (work item type) whose records to fetch, e.g. "Outreach", "Tasks", "Leads".
 
 **Where to get it:**
 
@@ -98,7 +138,7 @@ ${tableStep}
 
 ### 3.3 \`status_id\` (optional)
 
-**Purpose:** Restricts records to a single workflow status (e.g. "New", "In Progress", "Done").
+**Purpose:** Restricts records to one **workflow status** (e.g. "New", "In Progress", "Done"). Pass the encrypted id as the top-level \`status_id\` argument to **record_list** (it is included in the query body). **Do not** put workflow status conditions inside the addon \`filter\` object.
 
 **Where to get it:**
 
@@ -106,13 +146,38 @@ ${statusStep}
 
 ---
 
-### 3.4 \`isIncludeEmptyFields\` (optional)
+### 3.4 \`filter\` (optional)
+
+**Purpose:** Applies addon filters such as text search, numeric comparisons, date ranges, user filters, and nested AND/OR groups on **custom fields** (by \`field_id\`). **Not** for workflow status — use \`status_id\` (§3.3).
+
+**How to build it:**
+
+- **Do not** use \`filter\` for workflow status; always use top-level \`status_id\` for that.
+- Use \`field_id\` (encrypted) for **all** addon filter conditions.
+- To get the correct encrypted \`field_id\` values, call **project_table_fields(projectId, tableId)** and use \`data[].field_id\` from the response.
+- Allowed \`field_datatype\`: \`text\`, \`team\`, \`record\`, \`user\`, \`date\`, \`datetime\`, \`number\` (match the field type from **project_table_fields**).
+- Allowed \`field_operator\` (values): \`=\`, \`<>\`, \`like\`, \`in\`, \`not in\`, \`>\`, \`<\`, \`>=\`, \`<=\` — use only operators valid for that datatype (see tool schema descriptions).
+- **Contains / substring (text):** use \`field_datatype: "text"\` + \`field_operator: "like"\` + \`search_value1: "CEO"\` — \`like\` is how the API expresses “contains”; do **not** use \`=\` for substring matching.
+- For \`field_operator: "like"\`, **do not** pass special characters like \`%\` — just pass the substring in \`search_value1\`.
+- Combine conditions with \`logical_operator: "AND"\` or \`"OR"\`, and nest groups as needed.
+
+---
+
+### 3.5 \`title\` (optional)
+
+**Purpose:** Simple keyword search on the record title without building a \`filter\` object. The query API receives \`"title": "<your keyword>"\` (for example \`"title": "alpha"\`).
+
+**When to use:** Prefer \`title\` for a quick title search. Use \`filter\` when you need operators/AND/OR nesting across custom fields (by \`field_id\`).
+
+---
+
+### 3.6 \`isIncludeEmptyFields\` (optional)
 
 **Purpose:** When \`true\`, every record includes all field keys with \`null\` where empty. Set \`true\` or \`false\` (or omit) as needed.
 
 ---
 
-### 3.5 \`page\` and \`limit\` (optional)
+### 3.7 \`page\` and \`limit\` (optional)
 
 **Purpose:** Control pagination when listing records.
 
@@ -121,7 +186,7 @@ ${statusStep}
 
 Example HTTP call equivalent:
 
-\`GET /v1/records?project_id=<project_id>&page=2&limit=10\`
+\`POST /v1/records/query\` with body \`{ "project_id": "<project_id>", "page": 2, "limit": 10 }\`
 
 If you omit these, the API uses its default pagination.
 
@@ -131,23 +196,26 @@ If you omit these, the API uses its default pagination.
 |------|-----------------|----------------|
 | Records in one project | \`project_id\` (required) | **project_list** → \`data[].project_id\` |
 | Records in one workspace | Filter projects first | **project_list**(workspace_id) → then use \`project_id\` |
-| Records in one table | \`table_id\` (optional) | **project_tables_list**(projectId) → \`data[].table_id\` |
-| Records in one status | \`status_id\` (optional) | **record_list** → any \`data[].status_id\`, or **project_table_status_list** |
+| Records in one table | \`table_id\` (required) | **project_tables_list**(projectId) → \`data[].table_id\` |
+| Records in one workflow status | \`status_id\` (optional) | **project_table_status_list** or prior **record_list** → encrypted \`status_id\` (**not** inside \`filter\`) |
+| Records matching advanced conditions | \`filter\` (optional) | Build nested conditions with \`field_id\` |
+| Keyword search on title | \`title\` (optional) | Pass the search string, e.g. \`title: "alpha"\` |
 | Same fields on every record | \`isIncludeEmptyFields: true\` | N/A |
+| Return only specific fields | \`fieldsToDisplay\` | Use encrypted field IDs or system field keys |
 | Paginate results | \`page\`, \`limit\` | N/A (you decide page/size) |
 
-**Good practice:** Narrow in order — project → table → status. For the narrowest result use \`project_id\` + \`table_id\` + \`status_id\` together.
+**Good practice:** Narrow in order — project → table → \`status_id\` (if filtering by workflow status) → \`filter\` for custom-field conditions. Do **not** mix workflow status into \`filter\`.
 
 ---
 
 ## 5. Combining Filters (Examples)
 
-- **All records in a project:** \`record_list(project_id: "<from project_list>")\`
-- **All records in one table:** \`record_list(project_id: "...", table_id: "<from project_tables_list>")\`
-- **All records in one status:** \`record_list(project_id: "...", status_id: "<from a record or project_table_status_list>")\`
-- **One table and one status:** \`record_list(project_id: "...", table_id: "...", status_id: "...")\`
-- **Full list with all field keys:** \`record_list(project_id: "...", isIncludeEmptyFields: true)\` (optionally add \`table_id\` / \`status_id\`).
-- **Second page of 10 records:** \`record_list(project_id: "...", page: 2, limit: 10)\`.
+- **Records in one table:** \`record_list(project_id: "<from project_list>", table_id: "<from project_tables_list>")\`
+- **All records in one workflow status:** \`record_list(project_id: "...", table_id: "...", status_id: "<from project_table_status_list or record_list>")\` — use top-level \`status_id\`, not \`filter\`.
+- **Title keyword "alpha" (shortcut):** \`record_list(project_id: "...", table_id: "...", title: "alpha")\`
+- **One table with advanced filters:** \`record_list(project_id: "...", table_id: "...", filter: { logical_operator: "AND", conditions: [...] })\`
+- **Full list with all field keys:** \`record_list(project_id: "...", table_id: "...", isIncludeEmptyFields: true)\` (optionally add \`status_id\`).
+- **Second page of 10 records:** \`record_list(project_id: "...", table_id: "...", page: 2, limit: 10)\`.
 
 ---
 
@@ -155,7 +223,7 @@ If you omit these, the API uses its default pagination.
 
 1. ${flowProject}
 2. ${flowTable}
-3. ${flowStatus}
+3. If filtering by workflow status, resolve \`status_id\` and pass it as **top-level** \`status_id\` (never inside \`filter\`). Then build addon \`filter\` only if needed (or pass \`title\` for a simple title keyword search). Call \`record_list\` with \`project_id\`, \`table_id\`, optional \`status_id\`, and optional \`title\`, \`filter\`, \`fieldsToDisplay\`, \`order\`, \`page\`, \`limit\`.
 
 ---
 
@@ -170,8 +238,10 @@ Tool returns \`{ success, message, data: records }\`. Each record has keys mappe
 | Parameter | Source | Action |
 |-----------|--------|--------|
 | \`project_id\` | **project_list** → \`data[].project_id\` | Copy encrypted string as-is. |
-| \`table_id\` | **project_tables_list**(projectId) → \`data[].table_id\` | Copy as-is; omit for all tables. |
-| \`status_id\` | **record_list** or **project_table_status_list** → \`status_id\` | Copy as-is; omit for all statuses. |
+| \`table_id\` | **project_tables_list**(projectId) → \`data[].table_id\` | Copy encrypted string as-is (required). |
+| \`status_id\` | **project_table_status_list** or **record_list** → \`status_id\` | Copy encrypted string as-is for workflow status; **do not** put status inside \`filter\`. |
+| \`filter\` | You build it | Use \`field_id\` with nested AND/OR conditions (custom fields only). |
+| \`title\` | User keyword | Pass plain text for title keyword search. |
 | \`isIncludeEmptyFields\` | N/A | Set \`true\` or \`false\` (or omit). |
 | \`page\` | N/A | 1, 2, 3, ... (page number). |
 | \`limit\` | N/A | Page size (e.g. 10, 20, 50). |
@@ -182,9 +252,11 @@ Tool returns \`{ success, message, data: records }\`. Each record has keys mappe
 
 - Do **not** use numeric project/table IDs; use **encrypted** \`project_id\` and \`table_id\`.
 - Do **not** guess \`status_id\`; get it from a record or project_table_status_list.
+- Do **not** filter workflow status via the addon \`filter\` object — use top-level \`status_id\` only.
 - Use the **same** \`project_id\` for project_tables_list and record_list when filtering by table.
 - **detailed_record** expects the encrypted \`record_id\` from the list.
 - Prefer server-side filtering (\`table_id\`, \`status_id\`) over fetching all and filtering client-side.
+- For \`filter\` **contains** on text fields: use \`field_operator: "like"\` with a plain substring in \`search_value1\` — do **not** pass \`%\` (e.g. \`"CEO"\`, not \`"%CEO%"\`).
 `;
 }
 function buildGuideForNewRecord(opts) {
@@ -268,7 +340,7 @@ Use this table to decide which fields you must include (required = Yes) and how 
 ${contextSection}## Required inputs
 
 - \`project_id\`, \`table_id\`, \`status_id\`
-- \`recordFieldValues\` = array of items: \`{ field_id, field_key?, value }\`
+- \`recordFieldValues\` = array of items: \`{ field_id, value }\` (the server sends \`field_key: null\` on each item to the API)
 
 ---
 ## Minimal flow
@@ -285,7 +357,7 @@ ${contextSection}## Required inputs
 
 - Status must be set ONLY via \`status_id\` (never inside \`recordFieldValues\`)
 - \`field_id\` is REQUIRED in every \`recordFieldValues\` item (non-null, non-empty)
-- You MUST NOT output an item with \`{ field_key: null, field_id: null }\`
+- You MUST NOT output an item with a null/empty \`field_id\`
 - Skip any field where \`value\` is null / undefined / empty-string (do not include placeholder entries)
 
 ---
@@ -296,7 +368,7 @@ You MUST ignore it and rebuild \`recordFieldValues\` from scratch using:
 - project_table_fields
 - the user request values
 
-Hard failure: if any item has \`{ field_key: null AND field_id: null }\` → discard and rebuild the entire \`recordFieldValues\` array.
+Hard failure: if any item has a null/empty \`field_id\` → discard and rebuild the entire \`recordFieldValues\` array.
 
 ---
 ${mappingSection}
@@ -374,7 +446,7 @@ ${contextSection}## Required inputs
 
 - \`record_id\`, \`project_id\`, \`table_id\`
 - Optional: \`status_id\` (encrypted) to change workflow status
-- Optional: \`recordFieldValues\` = array of items: \`{ field_key?, field_id?, value }\`
+- Optional: \`recordFieldValues\` = array of items: \`{ field_id, value }\` (the server sends \`field_key: null\` on each item to the API)
 
 Never put status inside \`recordFieldValues\`. If you want a status change, pass \`status_id\` to **record_update** (it applies the workflow status via the HTTP status endpoint).
 
@@ -383,7 +455,7 @@ Never put status inside \`recordFieldValues\`. If you want a status change, pass
 
 1. Get \`record_id\` (encrypted) from record_list / your planning flow.
 2. Use \`project_id\` and \`table_id\` for the target record/table.
-3. Call project_table_fields(project_id, table_id) to get valid \`field_key\` and \`field_id\`.
+3. Call project_table_fields(project_id, table_id) to get valid \`field_id\` values (and metadata such as \`field_key\` for your own mapping only).
 4. (Conditional) If you want to update fields, build \`recordFieldValues\` from the user request (skip null/empty values).
 5. (Conditional, status change only) If you want to change workflow status, get \`status_id\` from project_table_status_list and pass it as \`status_id\` to record_update.
 6. Call record_update(\`record_id\`, \`project_id\`, \`table_id\`, \`recordFieldValues\`?, \`status_id\`?).
@@ -391,8 +463,7 @@ Never put status inside \`recordFieldValues\`. If you want a status change, pass
 ---
 ## 🔒 Hard constraints (MUST FOLLOW)
 
-- If a field has \`field_key: null\`, you MUST provide \`field_id\` (cannot be null/empty).
-- NEVER output a \`recordFieldValues\` item where both \`field_key\` and \`field_id\` are null/empty.
+- \`field_id\` is REQUIRED in every \`recordFieldValues\` item (non-null, non-empty).
 - DO NOT include any field where \`value\` is null/undefined/empty-string.
 - Only include fields that have actual user-provided non-empty \`value\`.
 - You may omit \`recordFieldValues\` entirely for status-only updates.
@@ -405,7 +476,7 @@ You MUST ignore it and rebuild \`recordFieldValues\` from scratch using:
 - project_table_fields
 - User request values
 
-Hard failure: if any item has { field_key: null AND field_id: null } → discard and rebuild the entire array.
+Hard failure: if any item has a null/empty \`field_id\` → discard and rebuild the entire array.
 
 ---
 ${mappingSection}
@@ -772,20 +843,48 @@ server.addTool({
 });
 server.addTool({
     name: "record_list",
-    description: "STEP 2 OF 2 — Fetches records for a project (optionally filtered by table/status/record) with pagination.\n" +
-        "REQUIRED CALL ORDER: (1) project_list → project_id (ENCRYPTED string), (2) record_list(project_id [, table_id] [, status_id] [, recordId]).\n\n" +
+    description: "STEP 2 OF 2 — Fetches records for a project table using the query API, with pagination, projected fields, and addon filters.\n" +
+        "REQUIRED CALL ORDER: (1) project_list → project_id (ENCRYPTED string), (2) project_tables_list(projectId) → table_id (ENCRYPTED string), (3) record_list(project_id, table_id [, status_id] [, title] [, filter]).\n\n" +
+        "Workflow **status** filtering: pass encrypted `status_id` as the **top-level** argument `status_id`. Do **not** encode workflow status inside the addon `filter` object.\n\n" +
+        "Optional `title` passes a keyword for record title search in the query body (`\"title\": \"...\"`).\n" +
+        "For **contains** on a text custom field in `filter`, use `field_operator: \"like\"` with the plain substring in `search_value1` (not `=`). Do **not** add `%` wildcards — e.g. `\"CEO\"`, not `\"%CEO%\"` (any `%` in the value is stripped before the API call).\n\n" +
         "RETURN VALUE NOTE: Each record contains TWO id fields:\n" +
         "- record_id (ENCRYPTED string) → pass to record_update or change_record_status\n" +
         "- id (integer / numeric) → present, but **not used by detailed_record** in this server.\n\n" +
         "Use `record_id` (encrypted) with detailed_record.",
     parameters: z.object({
         project_id: z.string().describe("Required. ENCRYPTED project_id string from project_list. Pass as-is."),
-        table_id: z.string().optional().describe("Optional. ENCRYPTED table_id string from project_tables_list(projectId). Omit for all tables."),
-        status_id: z.string().optional().describe("Optional. ENCRYPTED status_id string from project_table_status_list or prior record_list. Omit for all statuses."),
-        recordId: z.string().optional().describe("Optional. ENCRYPTED record_id string (from record_list) to fetch/filter a specific record."),
+        table_id: z.string().describe("Required. ENCRYPTED table_id string from project_tables_list(projectId). Pass as-is."),
+        status_id: z
+            .string()
+            .optional()
+            .describe("Optional. ENCRYPTED workflow status id from project_table_status_list or a prior record_list. Pass as this top-level parameter only — do **not** put status filtering inside `filter`."),
+        recordId: z.string().optional().describe("Legacy optional record filter. Passed through when provided."),
         isIncludeEmptyFields: z.boolean().optional().describe("Optional. When true, every record includes all field keys (with null where there is no value)."),
         page: z.number().int().positive().optional().describe("Optional. Page number for pagination (1-based). If omitted, server default is used."),
         limit: z.number().int().positive().optional().describe("Optional. Page size for pagination. If omitted, server default is used."),
+        order: z
+            .string()
+            .optional()
+            .describe("Optional sort order for the query API, for example `modified_desc`."),
+        loadPartialData: z
+            .boolean()
+            .optional()
+            .describe("Optional. Query API flag to load partial record data."),
+        fieldsToDisplay: z
+            .array(z.string().min(1))
+            .optional()
+            .describe("Optional list of encrypted field IDs or system field keys to request from the query API."),
+        filter: recordListFilterGroupSchema
+            .optional()
+            .describe("Optional addon filter tree for **custom fields** (by field_id). Supports nested AND/OR groups. " +
+            "Operators: =, <>, like, in, not in, >, <, >=, <= (must pair with a valid field_datatype per tool schema). " +
+            "For text **contains**, use `field_operator: \"like\"` and a plain `search_value1` substring — no `%` wildcards. " +
+            "Do **not** use `filter` for workflow status — use top-level `status_id` instead."),
+        title: z
+            .string()
+            .optional()
+            .describe("Optional. Keyword search on record title; sent in the query body as `\"title\": \"<keyword>\"` (e.g. `\"alpha\"`). Omit for no title filter."),
         select_fields: z
             .array(z.string().min(1))
             .optional()
@@ -800,25 +899,47 @@ server.addTool({
     },
     execute: async (args, { session }) => {
         try {
-            const params = {
+            const payload = {
                 project_id: args.project_id,
+                table_id: args.table_id,
             };
             if (args.status_id != null)
-                params.status_id = args.status_id;
-            if (args.table_id != null)
-                params.table_id = args.table_id;
+                payload.status_id = args.status_id;
             if (args.recordId != null)
-                params.recordId = args.recordId;
-            if (args.isIncludeEmptyFields != null)
-                params.isIncludeEmptyFields = String(args.isIncludeEmptyFields);
+                payload.recordId = args.recordId;
             if (args.page != null)
-                params.page = String(args.page);
+                payload.page = args.page;
             if (args.limit != null)
-                params.limit = String(args.limit);
-            const queryString = new URLSearchParams(params).toString();
-            const response = await axios.get(`${plumoApiV1Base()}/records?${queryString}`, {
+                payload.limit = args.limit;
+            if (args.order != null)
+                payload.order = args.order;
+            if (args.loadPartialData != null)
+                payload.loadPartialData = args.loadPartialData;
+            if (args.fieldsToDisplay != null)
+                payload.fieldsToDisplay = args.fieldsToDisplay;
+            const normalizeLikeValue = (s) => s.replace(/%/g, "").trim();
+            const normalizeRecordListFilterGroup = (g) => ({
+                logical_operator: g.logical_operator,
+                conditions: g.conditions.map((c) => {
+                    if ("logical_operator" in c)
+                        return normalizeRecordListFilterGroup(c);
+                    if (c.field_operator === "like") {
+                        return { ...c, search_value1: normalizeLikeValue(c.search_value1) };
+                    }
+                    return c;
+                }),
+            });
+            if (args.filter != null)
+                payload.filter = normalizeRecordListFilterGroup(args.filter);
+            if (args.title != null && args.title.trim() !== "")
+                payload.title = args.title.trim();
+            if (args.isIncludeEmptyFields != null)
+                payload.isIncludeEmptyFields = args.isIncludeEmptyFields;
+            const response = await axios.post(`${plumoApiV1Base()}/records/query`, payload, {
                 headers: {
-                    Authorization: `Bearer ${session?.user_access_token}---CompanyID---${session?.companyId}`,
+                    Authorization: `Bearer ${session?.user_access_token}`,
+                    companyId: `[${session?.companyId}]`,
+                    "Content-Type": "application/json",
                 },
             });
             const raw = response.data?.data ?? response.data;
@@ -882,7 +1003,7 @@ server.addTool({
                 text: JSON.stringify({
                     success: true,
                     message: "Records retrieved successfully",
-                    data: finalRecords,
+                    data: { records_count: finalRecords?.length, records: finalRecords },
                 }),
             };
         }
@@ -929,23 +1050,52 @@ server.addTool({
 });
 server.addTool({
     name: "project_table_fields",
-    description: "UTILITY — Lists fields for a project table. REQUIRED BEFORE record_create / record_update when you need field IDs. ID TYPES: projectId ENCRYPTED string, tableId ENCRYPTED string. Returns ENCRYPTED field_id (proj_field_id) plus field_key (physical/system key when present), type, is_required, and value options for picklists. Use these results to build recordFieldValues.",
+    description: "UTILITY — Lists fields for a project table. REQUIRED BEFORE record_create / record_update when you need field IDs. ID TYPES: projectId ENCRYPTED string, tableId ENCRYPTED string. Returns ENCRYPTED field_id (proj_field_id) plus field_key (physical/system key when present), type, is_required, and value options for picklists. Use these results to build recordFieldValues.\n\n" +
+        "Optional pagination: pass `page` and/or `limit` (1-based page, page size) — sent as query params on `GET .../fields?page=&limit=`.",
     canAccess(auth) {
         return checkAccess(auth);
     },
     parameters: z.object({
         projectId: z.string().describe("Required. ENCRYPTED project_id string from project_list. Pass as-is."),
         tableId: z.string().describe("Required. ENCRYPTED table_id string from project_tables_list(projectId). Pass as-is."),
+        page: z
+            .number()
+            .int()
+            .positive()
+            .optional()
+            .describe("Optional. Page number for field list pagination (1-based). Omitted = API default."),
+        limit: z
+            .number()
+            .int()
+            .positive()
+            .optional()
+            .describe("Optional. Page size for field list pagination. Omitted = API default."),
     }),
     execute: async (args, { session }) => {
         try {
-            const response = await axios.get(`${plumoApiV1Base()}/projects/${encodeURIComponent(args.projectId)}/tables/${encodeURIComponent(args.tableId)}/fields`, {
+            const fieldsPath = `${plumoApiV1Base()}/projects/${encodeURIComponent(args.projectId)}/tables/${encodeURIComponent(args.tableId)}/fields`;
+            const query = new URLSearchParams();
+            if (args.page != null) {
+                query.set("page", String(args.page));
+            }
+            else {
+                query.set("page", "1");
+            }
+            if (args.limit != null) {
+                query.set("limit", String(args.limit));
+            }
+            else {
+                query.set("limit", "1000");
+            }
+            const url = query.toString() ? `${fieldsPath}?${query.toString()}` : fieldsPath;
+            const response = await axios.get(url, {
                 headers: {
                     Authorization: `Bearer ${session?.user_access_token}---CompanyID---${session?.companyId}`,
+                    Accept: "application/json",
                 },
             });
             const rawData = response.data?.data ?? response.data;
-            const items = Array.isArray(rawData) ? rawData : [];
+            const items = Array.isArray(rawData.fields) ? rawData.fields : [];
             const transformed = items.map((item) => {
                 const field = {
                     field_id: item.proj_field_id,
@@ -997,7 +1147,7 @@ server.addTool({
     name: "record_create",
     description: "STEP 5 OF 5 — Creates a new record. REQUIRED CALL ORDER: (1) project_list → project_id, (2) project_tables_list(projectId) → table_id, (3) project_table_status_list(projectId [, tableId]) → status_id, (4) project_table_fields(projectId, tableId) → field_id, (5) record_create(project_id, table_id, status_id, recordFieldValues). All IDs are ENCRYPTED strings — pass as-is.\n\n" +
         "recordFieldValues FORMAT:\n" +
-        "Array of objects. Each object sets one field. Only include fields you want to set.\n" +
+        "Array of objects. Each object sets one field: \`{ field_id, value }\` only. The server sends \`field_key: null\` on each item to the API. Only include fields you want to set.\n" +
         "Fields where is_required=true (from project_table_fields) MUST be included.\n\n" +
         "FIELD TYPE → VALUE FORMAT:\n" +
         "  text / string     → \"My task title\"\n" +
@@ -1009,9 +1159,9 @@ server.addTool({
         "  user              → \"usr_abc123\"\n\n" +
         "WORKED EXAMPLE:\n" +
         "[\n" +
-        "  { \"field_id\": \"ZmllbGQx\", \"field_key\": \"title\",     \"value\": \"Fix login bug\" },\n" +
-        "  { \"field_id\": \"ZmllbGQy\", \"field_key\": \"priority\",  \"value\": \"high\" },\n" +
-        "  { \"field_id\": \"ZmllbGQz\", \"field_key\": \"due_date\",  \"value\": \"2026-04-20\" }\n" +
+        "  { \"field_id\": \"ZmllbGQx\", \"value\": \"Fix login bug\" },\n" +
+        "  { \"field_id\": \"ZmllbGQy\", \"value\": \"high\" },\n" +
+        "  { \"field_id\": \"ZmllbGQz\", \"value\": \"2026-04-20\" }\n" +
         "]\n\n" +
         "WARNING: For dropdown fields, value must exactly match one of the strings in field_value_options returned by project_table_fields. Do not invent values.",
     parameters: z.object({
@@ -1021,7 +1171,6 @@ server.addTool({
         recordFieldValues: z
             .array(z.object({
             field_id: z.string().min(1).describe("Required. ENCRYPTED field_id string from project_table_fields. MUST NOT be null/empty."),
-            field_key: z.string().nullable().optional().describe("Optional. Physical/system field key like 'title' (only when available)."),
             value: z.any().describe("Field value to set for this record field."),
         }))
             .nonempty(),
@@ -1059,7 +1208,11 @@ server.addTool({
                 project_id: args.project_id,
                 table_id: args.table_id,
                 status_id: args.status_id,
-                recordFieldValues,
+                recordFieldValues: recordFieldValues.map(({ field_id, value }) => ({
+                    field_id,
+                    field_key: null,
+                    value,
+                })),
             };
             const response = await axios.post(`${plumoApiV1Base()}/records`, payload, {
                 headers: {
@@ -1113,7 +1266,7 @@ server.addTool({
     description: "STEP 2 OF 2 — Fetches full details of a single record: all fields, custom fields, comments, attachments, checklist items, linked records, and user info.\n" +
         "ID TYPE: record_id is an ENCRYPTED string (from record_list), NOT a numeric id.\n\n" +
         "REQUIRED CALL ORDER:\n" +
-        "(1) record_list(project_id) → locate the record by name/title, note its encrypted record_id string.\n" +
+        "(1) record_list(project_id, table_id) → locate the record by name/title, note its encrypted record_id string.\n" +
         "(2) detailed_record(record_id=that encrypted string).",
     parameters: z.object({
         record_id: z.string().describe("Required. ENCRYPTED record_id string from record_list. Pass as-is."),
@@ -1177,19 +1330,67 @@ server.addTool({
     },
 });
 server.addTool({
+    name: "record_add_comment",
+    description: "Adds a comment to an existing record.\n\n" +
+        "REQUIRED: encrypted `record_id` from **record_list** (same id used with **detailed_record** / **record_update**).\n\n",
+    parameters: z.object({
+        record_id: z.string().min(1).describe("Required. ENCRYPTED record_id string from record_list. Pass as-is."),
+        comment: z.string().min(1).describe("Required. Comment text (may include HTML entities or tags as supported by the product)."),
+    }),
+    canAccess(auth) {
+        return checkAccess(auth);
+    },
+    execute: async (args, { session }) => {
+        try {
+            const payload = {
+                comment: args.comment,
+                mention_userid: "",
+                mention_teamid: "",
+            };
+            const response = await axios.post(`${plumoApiV1Base()}/records/${encodeURIComponent(args.record_id)}/comments`, payload, {
+                headers: {
+                    Authorization: `Bearer ${session?.user_access_token}`,
+                    companyId: `[${session?.companyId}]`,
+                    "Content-Type": "application/json",
+                },
+            });
+            return {
+                type: "text",
+                text: JSON.stringify(response.data?.data ?? response.data ?? { success: true }),
+            };
+        }
+        catch (error) {
+            return {
+                type: "text",
+                text: JSON.stringify({
+                    success: false,
+                    error: error.response?.data ?? error.message ?? "Unknown error occurred",
+                }),
+            };
+        }
+    },
+});
+server.addTool({
     name: "record_update",
-    description: "STEP 4 OF 4 — Updates a record (fields and/or status). ID TYPES: record_id/project_id/table_id/status_id/field_id are ENCRYPTED strings — pass as-is.\n\n" +
-        "THREE USAGE MODES — choose the one that fits:\n\n" +
-        "Mode 1 — Fields only (do not pass status_id):\n" +
-        "  recordFieldValues: [{ field_id, field_key, value }, ...]\n" +
-        "  status_id: omit or null\n\n" +
-        "Mode 2 — Status only (do not pass field values):\n" +
-        "  status_id: \"ENCRYPTED_status_id from project_table_status_list\"\n" +
-        "  recordFieldValues: null\n\n" +
-        "Mode 3 — Fields + status in one call:\n" +
-        "  status_id: \"ENCRYPTED_status_id\"\n" +
-        "  recordFieldValues: [{ field_id, field_key, value }, ...]\n\n" +
-        "PREFERRED OVER change_record_status for all status changes.",
+    description: "STEP 4 OF 4 — Updates an existing record (field values and/or workflow status). REQUIRED CALL ORDER: (1) project_list → project_id, (2) project_tables_list(projectId) → table_id, (3) record_list(project_id, table_id) → record_id, (4) project_table_fields(projectId, tableId) → field_id (when updating fields), (5) project_table_status_list(projectId [, tableId]) → status_id (when changing status), (6) record_update(record_id, project_id, table_id, recordFieldValues?, status_id?). All IDs are ENCRYPTED strings — pass as-is.\n\n" +
+        "Do not put workflow status inside recordFieldValues — pass status_id separately. Prefer **record_update** with status_id over **change_record_status**.\n\n" +
+        "recordFieldValues FORMAT:\n" +
+        "Array of objects, or null/omit/[] for a status-only update. Each object updates one field: \`{ field_id, value }\` only (\`field_id\` from project_table_fields, non-null, non-empty). The server sends \`field_key: null\` on each item to the API.\n\n" +
+        "FIELD TYPE → VALUE FORMAT:\n" +
+        "  text / string     → \"My task title\"\n" +
+        "  text_multiline    → \"Multi-line\\ndescription\"\n" +
+        "  number            → 42\n" +
+        "  date              → \"2026-04-20\"  (ISO 8601)\n" +
+        "  dropdown/select   → \"high\"  (must match a field_value_options value exactly)\n" +
+        "  boolean           → true\n" +
+        "  user              → \"usr_abc123\"\n\n" +
+        "WORKED EXAMPLE:\n" +
+        "[\n" +
+        "  { \"field_id\": \"ZmllbGQx\", \"value\": \"Fix login bug (updated)\" },\n" +
+        "  { \"field_id\": \"ZmllbGQy\", \"value\": \"high\" },\n" +
+        "  { \"field_id\": \"ZmllbGQz\", \"value\": \"2026-04-22\" }\n" +
+        "]\n\n" +
+        "WARNING: For dropdown fields, value must exactly match one of the strings in field_value_options returned by project_table_fields. Do not invent values.",
     parameters: z.object({
         record_id: z.string().describe("Required. ENCRYPTED record_id string from record_list. Pass as-is."),
         project_id: z.string().describe("Required. ENCRYPTED project_id string from project_list. Pass as-is."),
@@ -1201,12 +1402,7 @@ server.addTool({
             .describe("Optional. ENCRYPTED status_id string from project_table_status_list. Pass as-is for status changes."),
         recordFieldValues: z
             .array(z.object({
-            field_key: z.string().nullable().optional().describe("Optional. Physical/system field key like 'title'."),
-            field_id: z
-                .string()
-                .nullable()
-                .optional()
-                .describe("Optional. ENCRYPTED field_id string from project_table_fields (required when field_key is null/empty)."),
+            field_id: z.string().min(1).describe("Required. ENCRYPTED field_id string from project_table_fields. Pass as-is."),
             value: z.any().describe("Field value to update."),
         }))
             .nullable()
@@ -1228,26 +1424,18 @@ server.addTool({
                     return false;
                 return true;
             });
-            const invalidItems = recordFieldValues.filter((it) => {
-                const k = it?.field_key ?? null;
+            const invalidFieldIdItems = recordFieldValues.filter((it) => {
                 const id = it?.field_id ?? null;
-                const hasKey = typeof k === "string" && k.trim().length > 0;
-                const hasId = typeof id === "string" && id.trim().length > 0;
-                // Must not send an item without any identifier.
-                if (!hasKey && !hasId)
-                    return true;
-                // If field_key is absent/null, field_id must be present.
-                if (!hasKey)
-                    return !hasId;
-                return false;
+                const hasId = typeof id === "string" ? id.trim().length > 0 : false;
+                return !hasId;
             });
-            if (invalidItems.length > 0) {
+            if (invalidFieldIdItems.length > 0) {
                 return {
                     type: "text",
                     text: JSON.stringify({
                         success: false,
-                        message: "Invalid recordFieldValues: each item must include either a valid field_key or a valid field_id; if field_key is null/empty then field_id must be provided.",
-                        invalid_count: invalidItems.length,
+                        message: "Invalid recordFieldValues: field_id is required for every item and must not be null/empty. Rebuild recordFieldValues using project_table_fields.",
+                        invalid_count: invalidFieldIdItems.length,
                     }),
                 };
             }
@@ -1273,7 +1461,11 @@ server.addTool({
                     record_id: args.record_id,
                     project_id: args.project_id,
                     table_id: args.table_id,
-                    recordFieldValues,
+                    recordFieldValues: recordFieldValues.map(({ field_id, value }) => ({
+                        field_id,
+                        field_key: null,
+                        value,
+                    })),
                 };
                 const response = await axios.post(`${plumoApiV1Base()}/records/update`, payload, {
                     headers: {
@@ -1382,7 +1574,7 @@ server.addTool({
             });
             return {
                 type: "text",
-                text: JSON.stringify(response.data),
+                text: JSON.stringify({ "success": true, "message": "Project table status retrieved successfully", "data": response.data.data?.transitions }),
             };
         }
         catch (error) {

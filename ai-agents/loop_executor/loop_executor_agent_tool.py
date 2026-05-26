@@ -442,7 +442,19 @@ DO NOT use for single-item work unless you explicitly want step expansion."""
         Either phase can be empty [] if not needed.
         """
         tool_names = [t.get("name") or t.get("custom_name") or t.get("app_code", "") for t in available_tools]
-        tool_list_str = ", ".join(f'"{n}"' for n in tool_names if n)
+        # Build name+description objects so the LLM can semantically pick the right tool
+        # even when the task query says "CRM" or "database" rather than the exact tool name.
+        _tool_descriptors = []
+        for t in available_tools:
+            _n = t.get("name") or t.get("custom_name") or t.get("app_code", "")
+            if not _n:
+                continue
+            _raw_desc = (t.get("description") or "").strip()
+            if _raw_desc.upper().startswith("COMPOSE_BEFORE_DELIVER:"):
+                _raw_desc = _raw_desc[len("COMPOSE_BEFORE_DELIVER:"):].strip()
+            _short_desc = _raw_desc[:120] if _raw_desc else ""
+            _tool_descriptors.append({"name": _n, "description": _short_desc} if _short_desc else {"name": _n})
+        tool_list_str = json.dumps(_tool_descriptors, ensure_ascii=False)
 
         # Detect any tool that self-declares as a content composer (COMPOSE_BEFORE_DELIVER keyword).
         # Fully dynamic — no tool names hardcoded here; the tool owns its own rule via description.
@@ -507,7 +519,8 @@ TASK: {user_query}
 ITEMS TO PROCESS:
 {items_json}
 {_shared_ctx_section}
-AVAILABLE TOOLS: [{tool_list_str}]
+AVAILABLE TOOLS (name + description — use the description to match task intent to the right tool):
+{tool_list_str}
 
 Generate a concrete two-phase execution plan:
 
@@ -578,6 +591,54 @@ Rules:
             if isinstance(parsed.get("per_item_operations"), list) or isinstance(parsed.get("aggregate_operations"), list):
                 parsed.setdefault("per_item_operations", [])
                 parsed.setdefault("aggregate_operations", [])
+
+                # ── Tool name validation & repair ─────────────────────────────
+                # The LLM may generate tool names that don't exactly match the
+                # available tools list (e.g. "CRM" instead of "PlumoAI").
+                # Repair them via substring/word overlap — fully dynamic, no
+                # hardcoded names. Unresolvable names are dropped with a warning.
+                valid_names = [
+                    t.get("name") or t.get("custom_name") or t.get("app_code", "")
+                    for t in available_tools
+                ]
+                valid_names = [n for n in valid_names if n]
+                valid_lower = {n.lower(): n for n in valid_names}
+
+                def _resolve_tool_name(raw: str) -> str:
+                    if not raw:
+                        return ""
+                    if raw in valid_names:
+                        return raw
+                    raw_l = raw.lower()
+                    if raw_l in valid_lower:
+                        return valid_lower[raw_l]
+                    for vl, vn in valid_lower.items():
+                        if raw_l in vl or vl in raw_l:
+                            logger.warning("🔧 Loop Executor: resolved tool '%s' → '%s' (substring)", raw, vn)
+                            return vn
+                    raw_words = {w for w in raw_l.split() if len(w) >= 3}
+                    for vl, vn in valid_lower.items():
+                        if raw_words & {w for w in vl.split() if len(w) >= 3}:
+                            logger.warning("🔧 Loop Executor: resolved tool '%s' → '%s' (word overlap)", raw, vn)
+                            return vn
+                    logger.warning("⚠️ Loop Executor: tool '%s' not in available tools — dropping call", raw)
+                    return ""
+
+                for item_op in parsed["per_item_operations"]:
+                    cleaned_calls = []
+                    for call in (item_op.get("calls") or []):
+                        resolved = _resolve_tool_name(call.get("tool_name", ""))
+                        if resolved:
+                            call["tool_name"] = resolved
+                            cleaned_calls.append(call)
+                    item_op["calls"] = cleaned_calls
+
+                parsed["aggregate_operations"] = [
+                    {**agg, "tool_name": _resolve_tool_name(agg.get("tool_name", ""))}
+                    for agg in parsed["aggregate_operations"]
+                    if _resolve_tool_name(agg.get("tool_name", ""))
+                ]
+
                 logger.info(
                     "🔁 Loop Executor plan: %d per-item groups, %d aggregate calls",
                     len(parsed["per_item_operations"]),

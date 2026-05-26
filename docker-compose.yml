@@ -182,9 +182,11 @@ services:
     volumes:
       - ./ai-agents:/opt/plumoai/ai-agents:ro
       - ./storage:/opt/plumoai/storage
+      - ./ai-employees:/opt/plumoai/ai-employees
     environment:
       PLUMOAI_AI_AGENTS_APPS_PATH: /opt/plumoai/ai-agents
       LOCAL_STORAGE_PATH: /opt/plumoai/storage
+      AI_EMPLOYEES_PATH: /opt/plumoai/ai-employees
       NODE_ENV: production
       # One reverse proxy (Traefik) in front → Express/Nest req.ip / forwarded headers
       TRUST_PROXY: ${TRUST_PROXY:-1}
@@ -203,6 +205,7 @@ services:
       AWS_REGION: ${AWS_REGION}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      LOG_LEVEL: info
     secrets:
       - mysql_db
       - mysql_user
@@ -279,6 +282,7 @@ services:
       COMPANY_URL: ${COMPANY_URL:-http://company:3001}
       PORT: ${PORT:-3002}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      AGENT_VERSION: v2
     networks:
       - internal   # talk to auth/company/db services
       - frontend   # reach external APIs (OpenRouter, OpenAI, etc.)
