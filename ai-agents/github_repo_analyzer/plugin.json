@@ -1,0 +1,9 @@
+{
+"plugin_id": "github_repo_analyzer",
+"app_codes": ["github_repo_analyzer"],
+"type": "python_tool_agent",
+"display_name": "GitHub Repository Analyzer",
+"description": "Analyze GitHub repositories and provide project insights.",
+"entrypoint": "entrypoint.py",
+"auto_attach_to_all_agents": true
+}
