@@ -6,7 +6,7 @@ automatic syntax correction, and reduced truncated query errors
 import pyodbc
 import logging
 from typing import Dict, List, Any, Optional, AsyncGenerator
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 import uuid
 import json
@@ -38,7 +38,7 @@ def event(event_type: str, content: Any):
     return {
         "id": str(uuid.uuid4()),
         "type": event_type,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
         "content": content
     }
 

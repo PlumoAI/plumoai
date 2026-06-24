@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import io
 from dataclasses import dataclass, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import httpx
@@ -99,7 +99,7 @@ class MarketDataClient:
             try:
                 # [ openTime, open, high, low, close, volume, closeTime, ... ]
                 open_ms = int(item[0])
-                ts = datetime.utcfromtimestamp(open_ms / 1000).isoformat() + "Z"
+                ts = datetime.fromtimestamp(open_ms / 1000, tz=timezone.utc).isoformat().replace('+00:00', 'Z')
                 out.append(
                     Candle(
                         ts=ts,
