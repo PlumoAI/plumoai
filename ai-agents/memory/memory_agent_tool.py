@@ -593,7 +593,7 @@ Respond with JSON only:
                         {
                             "access_count": new_access,
                             "importance_score": new_score,
-                            "last_accessed_at": datetime.utcnow().isoformat() + "Z",
+                            "last_accessed_at": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
                         },
                     )
                     return {
@@ -633,7 +633,7 @@ Respond with JSON only:
                         {
                             "access_count": new_access,
                             "importance_score": new_score,
-                            "last_accessed_at": datetime.utcnow().isoformat() + "Z",
+                            "last_accessed_at": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
                         },
                     )
             return {
@@ -681,7 +681,7 @@ Respond with JSON only:
                         {
                             "access_count": new_access,
                             "importance_score": new_score,
-                            "last_accessed_at": datetime.utcnow().isoformat() + "Z",
+                            "last_accessed_at": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
                         },
                     )
                     return {
@@ -908,7 +908,7 @@ Respond with JSON only:
         top = scored[:limit]
 
         if update_access:
-            now_iso = datetime.utcnow().isoformat() + "Z"
+            now_iso = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
             patch_tasks = []
             for mem, _ in top:
                 mem_id = mem.get("_id") or mem.get("memory_id")
@@ -981,7 +981,7 @@ Respond with JSON only:
         if matched:
             import asyncio as _asyncio
 
-            now_iso = datetime.utcnow().isoformat() + "Z"
+            now_iso = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
             patch_tasks = []
             for m in matched:
                 mid = m.get("memory_id") or m.get("_id")
@@ -1075,7 +1075,7 @@ Respond with JSON only:
             "importance_score": new_importance,
             "scores": api_scores,
             "tags": tags,
-            "last_accessed_at": datetime.utcnow().isoformat() + "Z",
+            "last_accessed_at": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
         }
 
         logger.info("🧠 [Memory API] PATCH (update) %s | old: %s | new: %s | importance: %.4f", target_id, (original_content or "?")[:60], summary[:60], new_importance)

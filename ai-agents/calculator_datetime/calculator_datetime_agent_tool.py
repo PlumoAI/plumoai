@@ -70,7 +70,7 @@ def event(event_type: str, content: Any) -> Dict:
     return {
         "id": str(uuid.uuid4()),
         "type": event_type,
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
         "content": content,
     }
 

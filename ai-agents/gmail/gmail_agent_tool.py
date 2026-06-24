@@ -22,7 +22,7 @@ import logging
 import os
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -79,7 +79,7 @@ def event(event_type: str, content: Any) -> Dict:
     return {
         "id": str(uuid.uuid4()),
         "type": event_type,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
         "content": content,
     }
 
@@ -573,7 +573,7 @@ ACTIONS: list (search emails), read (by message_id), summarize (message or threa
         secret = self._resolve_tracking_secret()
         if not base or not secret:
             return None
-        ts = int(datetime.utcnow().timestamp())
+        ts = int(datetime.now(timezone.utc).timestamp())
         cid = str(self.company_id)
         data = f"{activity_id}:{project_fid}:{connected_account_fid}:{cid}:{ts}"
         sig = hmac.new(secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).hexdigest()
@@ -740,7 +740,7 @@ ACTIONS: list (search emails), read (by message_id), summarize (message or threa
             "subject": (subject or "").strip(),
             "content": (content or "").strip(),
             "status": "sent",
-            "sent_at": datetime.utcnow().isoformat(),
+            "sent_at": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
             "metadata": post_metadata,
         }
 
@@ -815,7 +815,7 @@ ACTIONS: list (search emails), read (by message_id), summarize (message or threa
             "subject": (subject or "").strip(),
             "content": (content or "").strip(),
             "status": "opened",
-            "opened_at": datetime.utcnow().isoformat(),
+            "opened_at": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
             "metadata": {
                 **(metadata or {}),
                 "open_result": {

@@ -1,8 +1,8 @@
 """
-Shared helpers for ai_agents plugins.
+Shared helpers for ai-agents plugins.
 
-This package exists so plugin entrypoints can import:
-    from ai_agents._shared.llm_tools_loader import ...
+This package exists so plugin entrypoints can import helpers
 without relying on implicit namespace packages.
+Note: directory is "ai-agents" (hyphen), not "ai_agents" (underscore).
 """
 

@@ -5,6 +5,6 @@
   "display_name": "Web Search",
   "description": "Search the web for current information, news, facts, and real-time data.",
   "entrypoint": "entrypoint.py",
-  "auto_attach_to_all_agents": false
+  "auto_attach_to_all_agents": true
 }
 

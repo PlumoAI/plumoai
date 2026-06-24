@@ -36,7 +36,7 @@ import hashlib
 import httpx
 import uuid
 from typing import Any, Dict, List, Optional, Set, Tuple, AsyncGenerator
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +152,7 @@ def event(event_type: str, content: Any) -> Dict:
     return {
         "id":        str(uuid.uuid4()),
         "type":      event_type,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
         "content":   content,
     }
 
