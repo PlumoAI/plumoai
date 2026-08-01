@@ -349,38 +349,19 @@ echo "Setting up secrets..."
 
 mkdir -p secrets
 
-echo -n "authdb_prod" > secrets/mysql_db.txt
-echo -n "plumoai_user" > secrets/mysql_user.txt
-echo -n "plumoai_mongo" > secrets/mongo_db.txt
-echo -n "plumoai_mongo_user" > secrets/mongo_user.txt
-
-if [ ! -f secrets/mysql_password.txt ]; then
-  openssl rand -base64 32 | tr -d '\n' > secrets/mysql_password.txt
-  echo "  Created new mysql_password"
+# PostgreSQL secret (password only; db/user set via env vars in docker-compose.yml)
+if [ ! -f secrets/postgres_password.txt ]; then
+  openssl rand -base64 32 | tr -d '\n' > secrets/postgres_password.txt
+  echo "  Created new postgres_password"
 else
-  echo "  Keeping existing mysql_password"
-fi
-if [ ! -f secrets/mysql_root_password.txt ]; then
-  openssl rand -base64 32 | tr -d '\n' > secrets/mysql_root_password.txt
-  echo "  Created new mysql_root_password"
-else
-  echo "  Keeping existing mysql_root_password"
-fi
-if [ ! -f secrets/mongo_password.txt ]; then
-  openssl rand -base64 32 | tr -d '\n' > secrets/mongo_password.txt
-  echo "  Created new mongo_password"
-else
-  echo "  Keeping existing mongo_password"
+  echo "  Keeping existing postgres_password"
 fi
 
 chmod 600 secrets/* 2>/dev/null || true
-[ -f scripts/mongo-secrets-entrypoint.sh ] && chmod +x scripts/mongo-secrets-entrypoint.sh
-[ -f scripts/init-mongo-user.sh ] && chmod +x scripts/init-mongo-user.sh
-[ -f scripts/mysql-root-secrets-entrypoint.sh ] && chmod +x scripts/mysql-root-secrets-entrypoint.sh
 
 # Strip CR from compose-mounted scripts (Windows CRLF breaks dash: "set: Illegal option -")
 repair_docker_mount_lf() {
-  for f in "$SCRIPT_DIR/scripts/"*.sh "$SCRIPT_DIR/init-privileges.sql"; do
+  for f in "$SCRIPT_DIR/scripts/"*.sh; do
     [ -f "$f" ] || continue
     if grep -q $'\r' "$f" 2>/dev/null; then
       tr -d '\r' < "$f" > "${f}.lf.$$" && mv "${f}.lf.$$" "$f"
@@ -406,8 +387,8 @@ if [ "$FRESH" = true ]; then
     echo "Error: failed to stop existing services (fresh mode)." >&2
     exit 1
   fi
-  docker volume rm plumoai-self-hosted_mysql_data 2>/dev/null || true
-  echo "  Fresh install: MySQL data volume removed"
+  docker volume rm plumoai-self-hosted_postgres_data 2>/dev/null || true
+  echo "  Fresh install: PostgreSQL data volume removed"
 else
   echo "  Existing stack detected: applying changes without full restart..."
 fi

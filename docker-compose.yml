@@ -79,14 +79,14 @@ services:
       - "traefik.http.services.main.loadbalancer.server.port=80"
 
   # Auth API → https://self.plumoai.com/api/auth (priority so path wins over main)
-  # internal = reach MySQL (hostname "mysql"); frontend = outbound internet (e.g. api.plumoai.com)
+  # internal = reach PostgreSQL (hostname "postgres"); frontend = outbound internet (e.g. api.plumoai.com)
   # Secrets are mounted read-only at /run/secrets/<name>.
   auth:
     image: plumoai/authservice:${PLUMOAI_VERSION:-v1.0.1}
     container_name: auth-service
     restart: unless-stopped
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
     healthcheck:
       # Image has no curl; use Node to check port 3000.
@@ -118,8 +118,10 @@ services:
       NODE_ENV: production   # enables V8 opts, disables dev middleware, reduces CPU/RAM
       # One reverse proxy (Traefik) in front → Express/Nest req.ip / forwarded headers
       TRUST_PROXY: ${TRUST_PROXY:-1}
-      DB_HOST: ${DB_HOST:-mysql}
-      DB_PORT: ${DB_PORT:-3306}
+      # PostgreSQL (unified database)
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_ENGINE: postgres
       # Outbound mail (auth): ses | smtp | disabled (false/0/off/no/none/disabled in app)
       EMAIL_PROVIDER: ${EMAIL_PROVIDER:-}
       MAIL_FROM: ${MAIL_FROM:-}
@@ -131,11 +133,9 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_SECURE: ${SMTP_SECURE:-}
-      AUTH_BASE_ROUTE : /api/auth
+      AUTH_BASE_ROUTE: /api/auth
     secrets:
-      - mysql_db
-      - mysql_user
-      - mysql_password
+      - postgres_password
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.auth.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/api/auth`)"
@@ -153,9 +153,7 @@ services:
     container_name: api-service
     restart: unless-stopped
     depends_on:
-      mysql:
-        condition: service_healthy
-      mongodb:
+      postgres:
         condition: service_healthy
     healthcheck:
       # Image has no curl; use Node to check port 3001.
@@ -189,13 +187,14 @@ services:
       # One reverse proxy (Traefik) in front → Express/Nest req.ip / forwarded headers
       TRUST_PROXY: ${TRUST_PROXY:-1}
       PORT: ${PORT:-3001}
-      DB_HOST: ${DB_HOST:-mysql}
-      DB_PORT: ${DB_PORT:-3306}
-      MONGODB_HOST: ${MONGODB_HOST:-mongodb}
-      MONGODB_PORT: ${MONGODB_PORT:-27017}
+      # PostgreSQL (unified database)
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_ENGINE: postgres
+      # Legacy env vars kept for backward compatibility during migration
+      # MONGODB_HOST and MILVUS_URL are no longer used
       Auth_URL: ${Auth_URL:-http://auth:3000}
       PLUMOAI_DIGITAL_EMPLOYEE_API_URL: ${PLUMOAI_DIGITAL_EMPLOYEE_API_URL:-http://ai:3002}
-      MILVUS_URL: "http://milvus-standalone:19530"
       # OpenAI key used by the company/api service for knowledgebase embeddings (optional)
       OPENAI_API_KEY_KNOWLEDGEBASE: ${OPENAI_API_KEY_KNOWLEDGEBASE:-}
       STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
@@ -204,12 +203,7 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     secrets:
-      - mysql_db
-      - mysql_user
-      - mysql_password
-      - mongo_db
-      - mongo_user
-      - mongo_password
+      - postgres_password
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.api.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/api/company`)"
@@ -287,39 +281,27 @@ services:
       options: { max-size: "10m", max-file: "3" }
     # No Traefik labels — not exposed to the internet
 
-  # ------------------- MySQL Database -------------------
-  mysql:
-    image: mysql:8.0
-    container_name: plumoai-mysql
+  # ------------------- PostgreSQL Database (unified: relational + JSONB + pgvector) -------------------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: plumoai-postgres
     restart: unless-stopped
-    # /bin/sh + path avoids broken shebang when bind-mounted files have Windows CRLF ("no such file or directory")
-    entrypoint: ["/bin/sh", "/scripts/mysql-root-secrets-entrypoint.sh"]
     healthcheck:
-      # Verify authenticated readiness instead of treating "access denied" as healthy.
-      # On Windows / WSL and slow disks, first boot can still take several minutes.
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$$(cat /run/secrets/mysql_root_password)\" --silent"]
-      interval: 20s
-      timeout: 15s
-      retries: 8
-      start_period: 180s
-    command:
-      - --default-authentication-plugin=mysql_native_password
-      - --log-bin-trust-function-creators=1
-      - --lower_case_table_names=1
+      # Use default postgres user/db for health check (always available)
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     environment:
-      MYSQL_DATABASE_FILE: /run/secrets/mysql_db
-      MYSQL_USER_FILE: /run/secrets/mysql_user
-      MYSQL_PASSWORD_FILE: /run/secrets/mysql_password
-      MYSQL_ROOT_HOST: "%"
+      POSTGRES_DB: plumoai
+      POSTGRES_USER: plumoai_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
     secrets:
-      - mysql_db
-      - mysql_user
-      - mysql_password
-      - mysql_root_password
+      - postgres_password
     volumes:
-      - mysql_data:/var/lib/mysql
-      - ./scripts/mysql-root-secrets-entrypoint.sh:/scripts/mysql-root-secrets-entrypoint.sh:ro
-      - ./init-privileges.sql:/docker-entrypoint-initdb.d/01-init-privileges.sql:ro
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-postgres.sh:/docker-entrypoint-initdb.d/init-postgres.sh:ro
     networks:
       - internal
     deploy:
@@ -331,146 +313,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-  # ------------------- MongoDB (own secrets: mongo_db, mongo_user, mongo_password) -------------------
-  mongodb:
-    image: mongo:7
-    container_name: plumoai-mongodb
-    restart: unless-stopped
-    healthcheck:
-      # mongosh is relatively heavy in containers and can briefly stall on Windows/WSL
-      # under I/O pressure, so keep the check lightweight and allow more time.
-      test: ["CMD-SHELL", "mongosh --quiet --eval \"quit(db.adminCommand({ ping: 1 }).ok ? 0 : 2)\""]
-      interval: 45s
-      timeout: 20s
-      retries: 8
-      start_period: 90s
-    # WiredTiger cache = ~50% of container memory limit.
-    # 512M cap starves the cache (only ~256MB), causing heavy I/O and slow
-    # serverStatus/health-check responses. Raise to 1G to match MySQL.
-    command: ["--wiredTigerCacheSizeGB", "0.5"]
-    entrypoint: ["/bin/sh", "/scripts/mongo-secrets-entrypoint.sh"]
-    volumes:
-      - ./scripts/mongo-secrets-entrypoint.sh:/scripts/mongo-secrets-entrypoint.sh:ro
-      - ./scripts/init-mongo-user.sh:/docker-entrypoint-initdb.d/init-mongo-user.sh:ro
-      - mongo_data:/data/db
-    # Explicitly set secret file mode so the Mongo image (non-root) can read them.
-    # Some Docker/Compose combinations mount secrets as 0400 root by default, which breaks init scripts.
-    secrets:
-      - source: mongo_db
-        target: mongo_db
-        mode: 0444
-      - source: mongo_user
-        target: mongo_user
-        mode: 0444
-      - source: mongo_password
-        target: mongo_password
-        mode: 0444
-    networks:
-      - internal
-    deploy:
-      resources:
-        limits: { memory: 1G }
-        reservations: { memory: 256M }
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # ------------------- Milvus (Vector DB, standalone) -------------------
-  # Internal-only: other services can reach it at milvus:19530
-  milvus-etcd:
-    image: quay.io/coreos/etcd:v3.5.25
-    container_name: milvus-etcd
-    restart: unless-stopped
-    environment:
-      ETCD_AUTO_COMPACTION_MODE: revision
-      ETCD_AUTO_COMPACTION_RETENTION: "1000"
-      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
-      ETCD_SNAPSHOT_COUNT: "50000"
-    command:
-      - etcd
-      - -advertise-client-urls=http://milvus-etcd:2379
-      - -listen-client-urls
-      - http://0.0.0.0:2379
-      - --data-dir
-      - /etcd
-    volumes:
-      - milvus_etcd_data:/etcd
-    healthcheck:
-      test: ["CMD", "etcdctl", "endpoint", "health"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-    networks:
-      - internal
-    deploy:
-      resources:
-        limits: { memory: 512M }
-        reservations: { memory: 128M }
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "3" }
-
-  milvus-minio:
-    image: minio/minio:RELEASE.2024-05-28T17-19-04Z
-    container_name: milvus-minio
-    restart: unless-stopped
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    command: ["minio", "server", "/minio_data", "--console-address", ":9001"]
-    volumes:
-      - milvus_minio_data:/minio_data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-    networks:
-      - internal
-    deploy:
-      resources:
-        limits: { memory: 1G }
-        reservations: { memory: 256M }
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "3" }
-
-  milvus:
-    image: milvusdb/milvus:v2.6.14
-    container_name: milvus-standalone
-    restart: unless-stopped
-    command: ["milvus", "run", "standalone"]
-    security_opt:
-      - seccomp:unconfined
-    depends_on:
-      milvus-etcd:
-        condition: service_healthy
-      milvus-minio:
-        condition: service_healthy
-    environment:
-      MINIO_REGION: us-east-1
-      ETCD_ENDPOINTS: milvus-etcd:2379
-      MINIO_ADDRESS: milvus-minio:9000
-    volumes:
-      - milvus_data:/var/lib/milvus
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
-      interval: 30s
-      start_period: 90s
-      timeout: 20s
-      retries: 3
-    networks:
-      - internal
-    deploy:
-      resources:
-        limits: { memory: 2G }
-        reservations: { memory: 512M }
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "3" }
 
 # ------------------- Networks -------------------
 # frontend: normal network so Traefik gets host port bindings (80, 443)
@@ -481,27 +323,13 @@ networks:
     internal: true
 
 # ------------------- Volumes -------------------
+# Single postgres_data replaces: mysql_data, mongo_data, milvus_*_data
 volumes:
   traefik_data:
-  mysql_data:
-  mongo_data:
-  milvus_etcd_data:
-  milvus_minio_data:
-  milvus_data:
+  postgres_data:
 
 # ------------------- Secrets -------------------
+# PostgreSQL secrets (replaces MySQL + MongoDB + Milvus secrets)
 secrets:
-  mysql_db:
-    file: ./secrets/mysql_db.txt
-  mysql_user:
-    file: ./secrets/mysql_user.txt
-  mysql_password:
-    file: ./secrets/mysql_password.txt
-  mysql_root_password:
-    file: ./secrets/mysql_root_password.txt
-  mongo_db:
-    file: ./secrets/mongo_db.txt
-  mongo_user:
-    file: ./secrets/mongo_user.txt
-  mongo_password:
-    file: ./secrets/mongo_password.txt
+  postgres_password:
+    file: ./secrets/postgres_password.txt
