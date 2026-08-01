@@ -1,0 +1,68 @@
+# Development overlay for PlumoAI
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# This overlay adds development-specific configurations:
+# - Debug ports exposed
+# - Hot reload enabled
+# - Relaxed resource limits
+# - Verbose logging
+
+services:
+  traefik:
+    ports:
+      - "8080:8080"  # Traefik dashboard
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.allowEmptyServices=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+
+  main-app:
+    environment:
+      NODE_ENV: development
+    deploy:
+      resources:
+        limits: { memory: 1G }
+        reservations: { memory: 256M }
+
+  auth:
+    environment:
+      NODE_ENV: development
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+
+  company:
+    environment:
+      NODE_ENV: development
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+
+  ai:
+    environment:
+      LOG_LEVEL: debug
+    deploy:
+      resources:
+        limits: { memory: 2G }
+        reservations: { memory: 512M }
+
+  postgres:
+    ports:
+      - "5432:5432"  # Expose PostgreSQL for direct access
+    deploy:
+      resources:
+        limits: { memory: 2G }
+        reservations: { memory: 512M }

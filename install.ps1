@@ -288,26 +288,13 @@ if ($STORAGE_BACKEND -eq "s3") {
 Write-Host "Setting up secrets..." -ForegroundColor Cyan
 New-Item -ItemType Directory -Force -Path "secrets" | Out-Null
 
-# Fixed values
-"authdb_prod" | Out-File -FilePath "secrets/mysql_db.txt" -Encoding ascii -NoNewline
-"plumoai_user" | Out-File -FilePath "secrets/mysql_user.txt" -Encoding ascii -NoNewline
-"plumoai_mongo" | Out-File -FilePath "secrets/mongo_db.txt" -Encoding ascii -NoNewline
-"plumoai_mongo_user" | Out-File -FilePath "secrets/mongo_user.txt" -Encoding ascii -NoNewline
-
-# Random passwords (only if missing)
-$secrets = @(
-    @{ File = "mysql_password.txt"; Name = "mysql_password" },
-    @{ File = "mysql_root_password.txt"; Name = "mysql_root_password" },
-    @{ File = "mongo_password.txt"; Name = "mongo_password" }
-)
-foreach ($s in $secrets) {
-    $path = Join-Path "secrets" $s.File
-    if (!(Test-Path $path)) {
-        New-RandomBase64 | Out-File -FilePath $path -Encoding ascii -NoNewline
-        Write-Host "  Created new $($s.Name)"
-    } else {
-        Write-Host "  Keeping existing $($s.Name)"
-    }
+# PostgreSQL secret (password only; db/user set via env vars in docker-compose.yml)
+$pgPasswordPath = Join-Path "secrets" "postgres_password.txt"
+if (!(Test-Path $pgPasswordPath)) {
+    New-RandomBase64 | Out-File -FilePath $pgPasswordPath -Encoding ascii -NoNewline
+    Write-Host "  Created new postgres_password"
+} else {
+    Write-Host "  Keeping existing postgres_password"
 }
 
 # Docker bind-mounts .sh from Windows with CRLF: dash sees "set -e^M" -> "set: Illegal option -". Force LF.
@@ -318,8 +305,6 @@ function Repair-DockerMountLineEndings {
     if (Test-Path $scriptsDir) {
         $toFix += Get-ChildItem -Path $scriptsDir -Filter "*.sh" -File -ErrorAction SilentlyContinue
     }
-    $sql = Join-Path $Root "init-privileges.sql"
-    if (Test-Path $sql) { $toFix += Get-Item $sql }
     foreach ($item in $toFix) {
         if (-not $item) { continue }
         $text = [IO.File]::ReadAllText($item.FullName)
@@ -343,8 +328,8 @@ if ($Fresh) {
         Write-Host "Error: failed to stop existing services (fresh mode)." -ForegroundColor Red
         exit 1
     }
-    docker volume rm plumoai-self-hosted_mysql_data 2>$null
-    Write-Host "  Fresh install: MySQL data volume removed"
+    docker volume rm plumoai-self-hosted_postgres_data 2>$null
+    Write-Host "  Fresh install: PostgreSQL data volume removed"
 } else {
     Write-Host "  Existing stack detected: applying changes without full restart..." -ForegroundColor Gray
 }

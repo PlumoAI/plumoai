@@ -228,18 +228,18 @@ This makes PlumoAI not just an AI platform but a **complete operational workspac
 
 ## Production Installation (Docker Compose)
 
-This repo runs PlumoAI as a **multi-container stack** (UI + APIs + AI service + MySQL + MongoDB + Milvus) behind Traefik.
-For production, use **domain mode** (HTTPS with Let's Encrypt). For local evaluation/dev, use **localhost mode**.
+This repo runs PlumoAI as a **multi-container stack** (UI + APIs + AI service + PostgreSQL) behind Traefik.
+For production, use **domain mode** (HTTPS with Let’s Encrypt). For local evaluation/dev, use **localhost mode**.
 
 ### System requirements
 
 - **Minimum**
   - **CPU**: 2 vCPU
-  - **RAM**: **16 GB** (required; the full stack needs enough headroom for MySQL, MongoDB, Milvus, and services)
+  - **RAM**: **2 GB** (reduced from 16 GB — single PostgreSQL replaces MySQL + MongoDB + Milvus)
   - **Disk**: 30 GB free (SSD recommended)
 - **Recommended (production)**
   - **CPU**: 4+ vCPU
-  - **RAM**: 32+ GB
+  - **RAM**: 4+ GB
   - **Disk**: 100+ GB SSD (depends on file uploads + vector DB size)
 - **Network (production / domain mode)**
   - Public IP + domain DNS `A/AAAA` → server IP
@@ -287,12 +287,20 @@ LOCALHOST_PORT=7861
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
+Or using the new CLI tool:
+
+```powershell
+pip install -e plumo-cli
+plumo-cli init
+plumo-cli start
+```
+
 #### Step 4: Open
 
 - Domain mode: `https://<your-domain>`
 - Localhost mode: `http://localhost:7861`
 
-#### Optional: Fresh install (resets MySQL volume)
+#### Optional: Fresh install (resets PostgreSQL volume)
 
 ```powershell
 .\install.ps1 -Fresh
@@ -349,12 +357,20 @@ chmod +x install.sh
 ./install.sh
 ```
 
+Or using the new CLI tool:
+
+```bash
+pip install -e plumo-cli
+plumo-cli init
+plumo-cli start
+```
+
 #### Step 4: Open
 
 - Domain mode: `https://<your-domain>`
 - Localhost mode: `http://localhost:7861`
 
-#### Optional: Fresh install (resets MySQL volume)
+#### Optional: Fresh install (resets PostgreSQL volume)
 
 ```bash
 ./install.sh --fresh
@@ -411,12 +427,20 @@ chmod +x install.sh
 ./install.sh
 ```
 
+Or using the new CLI tool:
+
+```bash
+pip install -e plumo-cli
+plumo-cli init
+plumo-cli start
+```
+
 #### Step 4: Open
 
 - Domain mode: `https://<your-domain>`
 - Localhost mode: `http://localhost:7861`
 
-#### Optional: Fresh install (resets MySQL volume)
+#### Optional: Fresh install (resets PostgreSQL volume)
 
 ```bash
 ./install.sh --fresh
