@@ -1,0 +1,18 @@
+{
+  "name": "Notion",
+  "code": "notion",
+  "auth_type": "oauth2",
+  "required_fields": [
+    { "key": "client_id", "type": "text", "label": "Client ID" },
+    { "key": "client_secret", "type": "text", "label": "Client Secret" }
+  ],
+  "config": {
+    "authorization_endpoint": "https://api.notion.com/v1/oauth/authorize",
+    "token_endpoint": "https://api.notion.com/v1/oauth/token",
+    "response_type": "code",
+    "owner": "user",
+    "grant_types": ["authorization_code"],
+    "is_client_registration_required": false
+  },
+  "icon": "./notion.svg"
+}
