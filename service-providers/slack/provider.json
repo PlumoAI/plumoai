@@ -1,0 +1,19 @@
+{
+  "name": "Slack",
+  "code": "slack",
+  "auth_type": "oauth2",
+  "required_fields": [
+    { "key": "client_id", "type": "text", "label": "Client ID" },
+    { "key": "client_secret", "type": "text", "label": "Client Secret" }
+  ],
+  "config": {
+    "scope": "channels:read channels:write chat:write chat:write.public groups:read im:read im:write mpim:read reactions:read reactions:write search:read users:read users:read.email pins:read pins:write files:read files:write",
+    "user_scope": "",
+    "authorization_endpoint": "https://slack.com/oauth/v2/authorize",
+    "token_endpoint": "https://slack.com/api/oauth.v2.access",
+    "access_type": "offline",
+    "grant_types": ["authorization_code"],
+    "is_client_registration_required": false
+  },
+  "icon": "./slack.svg"
+}
