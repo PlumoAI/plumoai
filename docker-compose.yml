@@ -147,10 +147,15 @@ services:
       - "traefik.http.middlewares.auth-strip.stripprefix.prefixes=/api/auth"
       - "traefik.http.routers.auth.middlewares=auth-strip,sec-headers,ratelimit"
 
-  # ------------------- Company Service -------------------
-  company:
-    image: plumoai/api-service:${PLUMOAI_VERSION:-v1.0.1}
-    container_name: api-service
+  # ------------------- PlumoAI API (company-api + public-api, single container) -------------------
+  # Was two containers (company-api on :3001, public-api on :3010) behind two Traefik
+  # routers. Now one image (plumoai/plumoai-api) runs both apps + an internal nginx on
+  # :8080, routed by path prefix. Traefik's existing routing still works unmodified:
+  #   /api/company/* -> stripped by Traefik  -> nginx "/" catch-all      -> company-api
+  #   /api/v1/*      -> kept by Traefik      -> nginx "/api/" location   -> public-api
+  plumoai-api:
+    image: plumoai/plumoai-api:${PLUMOAI_API_VERSION:-v1.0.3}
+    container_name: plumoai-api
     restart: unless-stopped
     depends_on:
       mysql:
@@ -158,9 +163,9 @@ services:
       mongodb:
         condition: service_healthy
     healthcheck:
-      # Image has no curl; use Node to check port 3001.
+      # Image has no curl; use Node to check nginx (port 8080) -> company-api's /health.
       # interval 30s to avoid cold-starting Node every 15s (CPU spike).
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001/', r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:8080/health', r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))\""]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -168,14 +173,17 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
-          cpus: "0.75"      # company handles DB + S3 + AI calls; slightly more headroom
+          memory: 1G       # now hosts company-api + public-api + nginx in one container
+          cpus: "1.0"
         reservations:
-          memory: 128M
-          cpus: "0.10"
+          memory: 256M
+          cpus: "0.15"
     networks:
       - frontend
       - internal
+    ports:
+      # Host access: http://localhost:3010/api/v1/... (direct to public-api, bypassing nginx/Traefik — same as before)
+      - "3010:3010"
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
@@ -183,12 +191,12 @@ services:
       - ./ai-agents:/opt/plumoai/ai-agents:ro
       - ./storage:/opt/plumoai/storage
     environment:
+      # ---- company-api ----
       PLUMOAI_AI_AGENTS_APPS_PATH: /opt/plumoai/ai-agents
       LOCAL_STORAGE_PATH: /opt/plumoai/storage
       NODE_ENV: production
       # One reverse proxy (Traefik) in front → Express/Nest req.ip / forwarded headers
       TRUST_PROXY: ${TRUST_PROXY:-1}
-      PORT: ${PORT:-3001}
       DB_HOST: ${DB_HOST:-mysql}
       DB_PORT: ${DB_PORT:-3306}
       MONGODB_HOST: ${MONGODB_HOST:-mongodb}
@@ -203,6 +211,11 @@ services:
       AWS_REGION: ${AWS_REGION}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      # ---- public-api ----
+      AUTH_API_BASE_URL: ${AUTH_API_BASE_URL:-http://auth:3000}
+      # company-api is now the SAME container (loopback on :3001), not a separate "company" host
+      COMPANY_API_BASE_URL: ${COMPANY_API_BASE_URL:-http://localhost:3001}
+      ENCRYPTION_KEY: ${PLUMOAI_PUBLIC_API_ENCRYPTION_KEY:-PlumoAi@7861}
     secrets:
       - mysql_db
       - mysql_user
@@ -212,41 +225,24 @@ services:
       - mongo_password
     labels:
       - "traefik.enable=true"
+
+      # company-api routes: /api/company/* (Traefik strips the prefix before forwarding)
       - "traefik.http.routers.api.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/api/company`)"
       - "traefik.http.routers.api.entrypoints=websecure"
       - "traefik.http.routers.api.tls.certresolver=mytlschallenge"
       - "traefik.http.routers.api.priority=100"
-      - "traefik.http.services.api.loadbalancer.server.port=3001"
+      - "traefik.http.routers.api.service=api"
+      - "traefik.http.services.api.loadbalancer.server.port=8080"
       - "traefik.http.middlewares.api-strip.stripprefix.prefixes=/api/company"
       - "traefik.http.routers.api.middlewares=api-strip,sec-headers,ratelimit"
 
-
-  plumoai-api:
-    image: plumoai/plumoai-public-api:latest
-    container_name: plumoai-api
-    restart: unless-stopped
-    ports:
-      # Host access: http://localhost:3010/api/v1/... (maps to container port 3010)
-      - "3010:3010"
-    environment:
-      PORT: "3010"
-      AUTH_API_BASE_URL: ${AUTH_API_BASE_URL:-http://auth:3000}
-      COMPANY_API_BASE_URL: ${COMPANY_API_BASE_URL:-http://company:3001}
-      ENCRYPTION_KEY: ${PLUMOAI_PUBLIC_API_ENCRYPTION_KEY:-PlumoAi@7861}
-    networks:
-      - internal
-      - frontend
-    labels:
-      - "traefik.enable=true"
-      # Public API: keep the /api/v1 prefix when forwarding to the backend (no stripPrefix).
-      # Use distinct router/service names to avoid clashing with the existing `api` router/service
-      # used by the company service.
+      # public-api routes: /api/v1/* (prefix kept, forwarded as-is)
       - "traefik.http.routers.plumoai-public-api.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/api/v1`)"
       - "traefik.http.routers.plumoai-public-api.entrypoints=websecure"
       - "traefik.http.routers.plumoai-public-api.tls.certresolver=mytlschallenge"
       - "traefik.http.routers.plumoai-public-api.priority=150"
       - "traefik.http.routers.plumoai-public-api.service=plumoai-public-api"
-      - "traefik.http.services.plumoai-public-api.loadbalancer.server.port=3010"
+      - "traefik.http.services.plumoai-public-api.loadbalancer.server.port=8080"
       - "traefik.http.routers.plumoai-public-api.middlewares=sec-headers,ratelimit"
 
   # ------------------- AI Service (internal only — no exposed URL) -------------------
@@ -276,7 +272,8 @@ services:
     environment:
       PLUMOAI_APP_AGENTS_EXTERNAL_DIR: /opt/plumoai/app_agents
       AUTH_URL: ${AUTH_URL:-http://auth:3000}
-      COMPANY_URL: ${COMPANY_URL:-http://company:3001}
+      # company-api now lives in the merged plumoai-api container (was its own "company" host)
+      COMPANY_URL: ${COMPANY_URL:-http://plumoai-api:3001}
       PORT: ${PORT:-3002}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     networks:
