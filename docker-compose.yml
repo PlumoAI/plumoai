@@ -203,7 +203,6 @@ services:
       MONGODB_PORT: ${MONGODB_PORT:-27017}
       Auth_URL: ${Auth_URL:-http://auth:3000}
       PLUMOAI_DIGITAL_EMPLOYEE_API_URL: ${PLUMOAI_DIGITAL_EMPLOYEE_API_URL:-http://ai:3002}
-      MILVUS_URL: "http://milvus-standalone:19530"
       # OpenAI key used by the company/api service for knowledgebase embeddings (optional)
       OPENAI_API_KEY_KNOWLEDGEBASE: ${OPENAI_API_KEY_KNOWLEDGEBASE:-}
       STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
@@ -375,100 +374,6 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ------------------- Milvus (Vector DB, standalone) -------------------
-  # Internal-only: other services can reach it at milvus:19530
-  milvus-etcd:
-    image: quay.io/coreos/etcd:v3.5.25
-    container_name: milvus-etcd
-    restart: unless-stopped
-    environment:
-      ETCD_AUTO_COMPACTION_MODE: revision
-      ETCD_AUTO_COMPACTION_RETENTION: "1000"
-      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
-      ETCD_SNAPSHOT_COUNT: "50000"
-    command:
-      - etcd
-      - -advertise-client-urls=http://milvus-etcd:2379
-      - -listen-client-urls
-      - http://0.0.0.0:2379
-      - --data-dir
-      - /etcd
-    volumes:
-      - milvus_etcd_data:/etcd
-    healthcheck:
-      test: ["CMD", "etcdctl", "endpoint", "health"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-    networks:
-      - internal
-    deploy:
-      resources:
-        limits: { memory: 512M }
-        reservations: { memory: 128M }
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "3" }
-
-  milvus-minio:
-    image: minio/minio:RELEASE.2024-05-28T17-19-04Z
-    container_name: milvus-minio
-    restart: unless-stopped
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    command: ["minio", "server", "/minio_data", "--console-address", ":9001"]
-    volumes:
-      - milvus_minio_data:/minio_data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-    networks:
-      - internal
-    deploy:
-      resources:
-        limits: { memory: 1G }
-        reservations: { memory: 256M }
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "3" }
-
-  milvus:
-    image: milvusdb/milvus:v2.6.14
-    container_name: milvus-standalone
-    restart: unless-stopped
-    command: ["milvus", "run", "standalone"]
-    security_opt:
-      - seccomp:unconfined
-    depends_on:
-      milvus-etcd:
-        condition: service_healthy
-      milvus-minio:
-        condition: service_healthy
-    environment:
-      MINIO_REGION: us-east-1
-      ETCD_ENDPOINTS: milvus-etcd:2379
-      MINIO_ADDRESS: milvus-minio:9000
-    volumes:
-      - milvus_data:/var/lib/milvus
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
-      interval: 30s
-      start_period: 90s
-      timeout: 20s
-      retries: 3
-    networks:
-      - internal
-    deploy:
-      resources:
-        limits: { memory: 2G }
-        reservations: { memory: 512M }
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "3" }
-
 # ------------------- Networks -------------------
 # frontend: normal network so Traefik gets host port bindings (80, 443)
 # internal: isolated (no outbound); backends + Traefik for backend access
@@ -482,9 +387,6 @@ volumes:
   traefik_data:
   mysql_data:
   mongo_data:
-  milvus_etcd_data:
-  milvus_minio_data:
-  milvus_data:
 
 # ------------------- Secrets -------------------
 secrets:
