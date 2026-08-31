@@ -441,6 +441,11 @@ if ! $COMPOSE_BIN $ENV_ARGS $COMPOSE_FILES up -d --remove-orphans; then
 fi
 
 echo ""
+echo "Image versions running (tags are mutable — record these digests if you need to prove"
+echo "exactly what was deployed, or to pin them later via docker-compose.override.yml):"
+$COMPOSE_BIN $ENV_ARGS $COMPOSE_FILES images 2>/dev/null || true
+
+echo ""
 if [ "$RUN_MODE" = "localhost" ]; then
   echo "PlumoAI is running at http://localhost:${LOCALHOST_PORT}"
 else

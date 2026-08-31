@@ -1,9 +1,39 @@
 services:
+  # ------------------- Docker socket proxy -------------------
+  # Traefik needs to read container labels to build its routing config, but it doesn't
+  # need the full Docker API. This proxy holds the real socket and exposes only the
+  # read-only endpoints Traefik's docker provider actually calls (containers, networks),
+  # with POST disabled — so a compromised Traefik container can't use the socket to
+  # escalate into full Docker control on the host.
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: docker-socket-proxy
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1
+      NETWORKS: 1
+      SERVICES: 0
+      TASKS: 0
+      POST: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits: { memory: 64M }
+        reservations: { memory: 16M }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
   # ------------------- Traefik (Reverse Proxy) -------------------
   traefik:
     image: traefik:v3.6
     container_name: traefik
     restart: always
+    depends_on:
+      - docker-socket-proxy
     deploy:
       resources:
         limits: { memory: 256M }
@@ -16,6 +46,7 @@ services:
     command:
       - "--api.insecure=false"
       - "--providers.docker=true"
+      - "--providers.docker.endpoint=tcp://docker-socket-proxy:2375"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.allowEmptyServices=true"
       - "--serversTransport.forwardingTimeouts.responseHeaderTimeout=0"
@@ -30,12 +61,14 @@ services:
       - "--certificatesresolvers.mytlschallenge.acme.tlschallenge=true"
       - "--certificatesresolvers.mytlschallenge.acme.email=${SSL_EMAIL}"
       - "--certificatesresolvers.mytlschallenge.acme.storage=/letsencrypt/acme.json"
+      # Defaults to Let's Encrypt production. Set ACME_CASERVER in .env to the LE staging
+      # directory when reinstalling/testing often, to avoid hitting production rate limits.
+      - "--certificatesresolvers.mytlschallenge.acme.caserver=${ACME_CASERVER:-https://acme-v02.api.letsencrypt.org/directory}"
     ports:
       - "0.0.0.0:80:80"
       - "0.0.0.0:443:443"
     volumes:
       - traefik_data:/letsencrypt
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - frontend
       - internal

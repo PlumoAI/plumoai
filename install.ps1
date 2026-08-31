@@ -383,6 +383,11 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host ""
+Write-Host "Image versions running (tags are mutable -- record these digests if you need to prove" -ForegroundColor Gray
+Write-Host "exactly what was deployed, or to pin them later via docker-compose.override.yml):" -ForegroundColor Gray
+& docker ($dockerArgs + @("images")) 2>$null
+
+Write-Host ""
 if ($RUN_MODE -eq "localhost") {
     Write-Host "PlumoAI is running at http://localhost:$LOCALHOST_PORT" -ForegroundColor Green
 } else {
