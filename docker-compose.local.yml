@@ -18,6 +18,11 @@ services:
     command:
       - "--api.insecure=true"
       - "--providers.docker=true"
+      # Compose overlay files replace the whole command list, not merge it — this flag
+      # has to be repeated here or Traefik silently falls back to dialing
+      # /var/run/docker.sock directly, which isn't mounted (see main docker-compose.yml
+      # Traefik comment for why the socket goes through docker-socket-proxy instead).
+      - "--providers.docker.endpoint=tcp://docker-socket-proxy:2375"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.allowEmptyServices=true"
       # If a backend (e.g. company) doesn't send response headers in time, return 504 instead of buffering forever
