@@ -17,6 +17,14 @@ services:
     image: wollomatic/socket-proxy:1
     container_name: docker-socket-proxy
     restart: unless-stopped
+    # The image defaults to USER 65534:65534 (nobody), which can't read a root-owned
+    # docker.sock. The project's own docs work around that with a host-specific docker
+    # group GID, but that GID varies per host (and doesn't apply the same way on Docker
+    # Desktop) — not something a self-hosted installer can discover reliably across
+    # arbitrary machines. Running as root matches the socket's owning uid everywhere,
+    # no host-specific lookup needed. cap_drop + no-new-privileges below still hold, so
+    # this isn't the same exposure as the old direct-mount-into-Traefik setup.
+    user: "0:0"
     read_only: true
     cap_drop:
       - ALL
