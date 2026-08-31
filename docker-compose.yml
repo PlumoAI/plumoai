@@ -191,6 +191,7 @@ services:
       - mysql_db
       - mysql_user
       - mysql_password
+      - app_secret
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.auth.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/api/auth`)"
@@ -467,3 +468,5 @@ secrets:
     file: ./secrets/mongo_user.txt
   mongo_password:
     file: ./secrets/mongo_password.txt
+  app_secret:
+    file: ./secrets/app_secret.txt
