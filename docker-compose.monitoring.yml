@@ -1,0 +1,109 @@
+# Optional monitoring overlay — adds container/host metrics and dashboards.
+# Not started by install.sh/install.ps1 by default. Run alongside the main stack:
+#
+#   docker compose --env-file .env -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+#
+# Grafana is reachable at http://<host>:3001 (change GRAFANA_ADMIN_PASSWORD before exposing
+# it beyond localhost, and put it behind Traefik + a strong auth middleware if you do).
+
+services:
+  # Per-container CPU/memory/network metrics, scraped by Prometheus below.
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: plumoai-cadvisor
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - monitoring
+    deploy:
+      resources:
+        limits: { memory: 256M }
+        reservations: { memory: 64M }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # Host-level CPU/memory/disk metrics.
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: plumoai-node-exporter
+    restart: unless-stopped
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    networks:
+      - monitoring
+    deploy:
+      resources:
+        limits: { memory: 128M }
+        reservations: { memory: 32M }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: plumoai-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=15d"
+    networks:
+      - monitoring
+    depends_on:
+      - cadvisor
+      - node-exporter
+    deploy:
+      resources:
+        limits: { memory: 512M }
+        reservations: { memory: 128M }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: plumoai-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env before starting Grafana}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      # Bind to localhost only; put behind Traefik + auth if you need remote access.
+      - "127.0.0.1:3001:3000"
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits: { memory: 256M }
+        reservations: { memory: 64M }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+networks:
+  monitoring:
+
+volumes:
+  prometheus_data:
+  grafana_data:

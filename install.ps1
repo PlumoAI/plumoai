@@ -2,7 +2,7 @@
 # Usage: .\install.ps1
 #        .\install.ps1 -Fresh
 
-param([switch]$Fresh)
+param([switch]$Fresh, [switch]$NoBackup)
 
 $ErrorActionPreference = "Stop"
 
@@ -285,6 +285,15 @@ if ($STORAGE_BACKEND -eq "s3") {
     Set-EnvValue $ENV_FILE "LOCAL_STORAGE_CONTAINER_PATH" $containerPath
 }
 
+$PLUMOAI_PUBLIC_API_ENCRYPTION_KEY = Get-EnvValue $ENV_FILE "PLUMOAI_PUBLIC_API_ENCRYPTION_KEY"
+if ([string]::IsNullOrWhiteSpace($PLUMOAI_PUBLIC_API_ENCRYPTION_KEY) -or ($PLUMOAI_PUBLIC_API_ENCRYPTION_KEY -like "*<*")) {
+    $PLUMOAI_PUBLIC_API_ENCRYPTION_KEY = New-RandomBase64
+    Set-EnvValue $ENV_FILE "PLUMOAI_PUBLIC_API_ENCRYPTION_KEY" $PLUMOAI_PUBLIC_API_ENCRYPTION_KEY
+    Write-Host "  Created new PLUMOAI_PUBLIC_API_ENCRYPTION_KEY"
+} else {
+    Write-Host "  Keeping existing PLUMOAI_PUBLIC_API_ENCRYPTION_KEY"
+}
+
 Write-Host "Setting up secrets..." -ForegroundColor Cyan
 New-Item -ItemType Directory -Force -Path "secrets" | Out-Null
 
@@ -337,6 +346,21 @@ if ($RUN_MODE -eq "localhost") { $dockerArgs += "-f", "docker-compose.local.yml"
 
 Write-Host "Starting services..." -ForegroundColor Cyan
 if ($Fresh) {
+    $mysqlRunning = & docker ($dockerArgs + @("ps", "--status", "running", "mysql")) 2>$null | Select-String "mysql"
+    if ($NoBackup) {
+        Write-Host "  Fresh install: -NoBackup passed, skipping backup before data loss." -ForegroundColor Gray
+    } elseif ($mysqlRunning) {
+        Write-Host "  Fresh install: backing up existing data first (this deletes the MySQL volume)..." -ForegroundColor Gray
+        $backupDir = "backups/pre-fresh-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+        & (Join-Path $PSScriptRoot "scripts/backup.ps1") -OutDir $backupDir
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Error: backup failed. Aborting -Fresh so no data is lost." -ForegroundColor Red
+            Write-Host "  Re-run with -Fresh -NoBackup to skip the backup and proceed anyway." -ForegroundColor Red
+            exit 1
+        }
+    } else {
+        Write-Host "  Fresh install: no running MySQL found, nothing to back up." -ForegroundColor Gray
+    }
     Write-Host "  Fresh install: stopping existing stack..." -ForegroundColor Gray
     & docker ($dockerArgs + @("down", "--remove-orphans", "--timeout", "20")) 2>$null
     if ($LASTEXITCODE -ne 0) {

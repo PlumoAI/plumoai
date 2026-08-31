@@ -24,9 +24,11 @@ plumo_install_banner() {
 plumo_install_banner
 
 FRESH=false
+SKIP_BACKUP=false
 for arg in "$@"; do
   case "$arg" in
     --fresh|-Fresh) FRESH=true ;;
+    --no-backup) SKIP_BACKUP=true ;;
   esac
 done
 
@@ -345,6 +347,15 @@ else
   set_env_key LOCAL_STORAGE_CONTAINER_PATH "$LOCAL_STORAGE_CONTAINER_PATH"
 fi
 
+PLUMOAI_PUBLIC_API_ENCRYPTION_KEY=$(get_env_value PLUMOAI_PUBLIC_API_ENCRYPTION_KEY)
+if [[ -z "$PLUMOAI_PUBLIC_API_ENCRYPTION_KEY" || "$PLUMOAI_PUBLIC_API_ENCRYPTION_KEY" == *"<"* ]]; then
+  PLUMOAI_PUBLIC_API_ENCRYPTION_KEY=$(openssl rand -base64 32 | tr -d '\n')
+  set_env_key PLUMOAI_PUBLIC_API_ENCRYPTION_KEY "$PLUMOAI_PUBLIC_API_ENCRYPTION_KEY"
+  echo "  Created new PLUMOAI_PUBLIC_API_ENCRYPTION_KEY"
+else
+  echo "  Keeping existing PLUMOAI_PUBLIC_API_ENCRYPTION_KEY"
+fi
+
 echo "Setting up secrets..."
 
 mkdir -p secrets
@@ -401,6 +412,18 @@ PS_HINT="$COMPOSE_BIN $ENV_ARGS -f docker-compose.yml"
 
 echo "Starting services..."
 if [ "$FRESH" = true ]; then
+  if [ "$SKIP_BACKUP" = true ]; then
+    echo "  Fresh install: --no-backup passed, skipping backup before data loss."
+  elif $COMPOSE_BIN $ENV_ARGS $COMPOSE_FILES ps --status running mysql 2>/dev/null | grep -q mysql; then
+    echo "  Fresh install: backing up existing data first (this deletes the MySQL volume)..."
+    if ! ./scripts/backup.sh "backups/pre-fresh-$(date +%Y%m%d-%H%M%S)"; then
+      echo "Error: backup failed. Aborting --fresh so no data is lost." >&2
+      echo "  Re-run with --fresh --no-backup to skip the backup and proceed anyway." >&2
+      exit 1
+    fi
+  else
+    echo "  Fresh install: no running MySQL found, nothing to back up."
+  fi
   echo "  Fresh install: stopping existing stack..."
   if ! $COMPOSE_BIN $ENV_ARGS $COMPOSE_FILES down --remove-orphans --timeout 20 2>/dev/null; then
     echo "Error: failed to stop existing services (fresh mode)." >&2
