@@ -147,10 +147,15 @@ services:
       - "traefik.http.middlewares.auth-strip.stripprefix.prefixes=/api/auth"
       - "traefik.http.routers.auth.middlewares=auth-strip,sec-headers,ratelimit"
 
-  # ------------------- Company Service -------------------
-  company:
-    image: plumoai/api-service:${PLUMOAI_VERSION:-v1.0.1}
-    container_name: api-service
+  # ------------------- PlumoAI API (company-api + public-api, single container) -------------------
+  # Was two containers (company-api on :3001, public-api on :3010) behind two Traefik
+  # routers. Now one image (plumoai/plumoai-api) runs both apps + an internal nginx on
+  # :8080, routed by path prefix. Traefik's existing routing still works unmodified:
+  #   /api/company/* -> stripped by Traefik  -> nginx "/" catch-all      -> company-api
+  #   /api/v1/*      -> kept by Traefik      -> nginx "/api/" location   -> public-api
+  plumoai-api:
+    image: plumoai/plumoai-api:${PLUMOAI_API_VERSION:-v1.0.3}
+    container_name: plumoai-api
     restart: unless-stopped
     depends_on:
       mysql:
@@ -158,9 +163,9 @@ services:
       mongodb:
         condition: service_healthy
     healthcheck:
-      # Image has no curl; use Node to check port 3001.
+      # Image has no curl; use Node to check nginx (port 8080) -> company-api's /health.
       # interval 30s to avoid cold-starting Node every 15s (CPU spike).
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001/', r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:8080/health', r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))\""]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -168,14 +173,17 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
-          cpus: "0.75"      # company handles DB + S3 + AI calls; slightly more headroom
+          memory: 1G       # now hosts company-api + public-api + nginx in one container
+          cpus: "1.0"
         reservations:
-          memory: 128M
-          cpus: "0.10"
+          memory: 256M
+          cpus: "0.15"
     networks:
       - frontend
       - internal
+    ports:
+      # Host access: http://localhost:3010/api/v1/... (direct to public-api, bypassing nginx/Traefik — same as before)
+      - "3010:3010"
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
@@ -184,20 +192,19 @@ services:
       - ./storage:/opt/plumoai/storage
       - ./ai-employees:/opt/plumoai/ai-employees
     environment:
+      # ---- company-api ----
       PLUMOAI_AI_AGENTS_APPS_PATH: /opt/plumoai/ai-agents
       LOCAL_STORAGE_PATH: /opt/plumoai/storage
       AI_EMPLOYEES_PATH: /opt/plumoai/ai-employees
       NODE_ENV: production
       # One reverse proxy (Traefik) in front → Express/Nest req.ip / forwarded headers
       TRUST_PROXY: ${TRUST_PROXY:-1}
-      PORT: ${PORT:-3001}
       DB_HOST: ${DB_HOST:-mysql}
       DB_PORT: ${DB_PORT:-3306}
       MONGODB_HOST: ${MONGODB_HOST:-mongodb}
       MONGODB_PORT: ${MONGODB_PORT:-27017}
       Auth_URL: ${Auth_URL:-http://auth:3000}
       PLUMOAI_DIGITAL_EMPLOYEE_API_URL: ${PLUMOAI_DIGITAL_EMPLOYEE_API_URL:-http://ai:3002}
-      MILVUS_URL: "http://milvus-standalone:19530"
       # OpenAI key used by the company/api service for knowledgebase embeddings (optional)
       OPENAI_API_KEY_KNOWLEDGEBASE: ${OPENAI_API_KEY_KNOWLEDGEBASE:-}
       STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
@@ -206,6 +213,11 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       LOG_LEVEL: info
+      # ---- public-api ----
+      AUTH_API_BASE_URL: ${AUTH_API_BASE_URL:-http://auth:3000}
+      # company-api is now the SAME container (loopback on :3001), not a separate "company" host
+      COMPANY_API_BASE_URL: ${COMPANY_API_BASE_URL:-http://localhost:3001}
+      ENCRYPTION_KEY: ${PLUMOAI_PUBLIC_API_ENCRYPTION_KEY:-PlumoAi@7861}
     secrets:
       - mysql_db
       - mysql_user
@@ -215,41 +227,24 @@ services:
       - mongo_password
     labels:
       - "traefik.enable=true"
+
+      # company-api routes: /api/company/* (Traefik strips the prefix before forwarding)
       - "traefik.http.routers.api.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/api/company`)"
       - "traefik.http.routers.api.entrypoints=websecure"
       - "traefik.http.routers.api.tls.certresolver=mytlschallenge"
       - "traefik.http.routers.api.priority=100"
-      - "traefik.http.services.api.loadbalancer.server.port=3001"
+      - "traefik.http.routers.api.service=api"
+      - "traefik.http.services.api.loadbalancer.server.port=8080"
       - "traefik.http.middlewares.api-strip.stripprefix.prefixes=/api/company"
       - "traefik.http.routers.api.middlewares=api-strip,sec-headers,ratelimit"
 
-
-  plumoai-api:
-    image: plumoai/plumoai-public-api:latest
-    container_name: plumoai-api
-    restart: unless-stopped
-    ports:
-      # Host access: http://localhost:3010/api/v1/... (maps to container port 3010)
-      - "3010:3010"
-    environment:
-      PORT: "3010"
-      AUTH_API_BASE_URL: ${AUTH_API_BASE_URL:-http://auth:3000}
-      COMPANY_API_BASE_URL: ${COMPANY_API_BASE_URL:-http://company:3001}
-      ENCRYPTION_KEY: ${PLUMOAI_PUBLIC_API_ENCRYPTION_KEY:-PlumoAi@7861}
-    networks:
-      - internal
-      - frontend
-    labels:
-      - "traefik.enable=true"
-      # Public API: keep the /api/v1 prefix when forwarding to the backend (no stripPrefix).
-      # Use distinct router/service names to avoid clashing with the existing `api` router/service
-      # used by the company service.
+      # public-api routes: /api/v1/* (prefix kept, forwarded as-is)
       - "traefik.http.routers.plumoai-public-api.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/api/v1`)"
       - "traefik.http.routers.plumoai-public-api.entrypoints=websecure"
       - "traefik.http.routers.plumoai-public-api.tls.certresolver=mytlschallenge"
       - "traefik.http.routers.plumoai-public-api.priority=150"
       - "traefik.http.routers.plumoai-public-api.service=plumoai-public-api"
-      - "traefik.http.services.plumoai-public-api.loadbalancer.server.port=3010"
+      - "traefik.http.services.plumoai-public-api.loadbalancer.server.port=8080"
       - "traefik.http.routers.plumoai-public-api.middlewares=sec-headers,ratelimit"
 
   # ------------------- AI Service (internal only — no exposed URL) -------------------
@@ -279,7 +274,8 @@ services:
     environment:
       PLUMOAI_APP_AGENTS_EXTERNAL_DIR: /opt/plumoai/app_agents
       AUTH_URL: ${AUTH_URL:-http://auth:3000}
-      COMPANY_URL: ${COMPANY_URL:-http://company:3001}
+      # company-api now lives in the merged plumoai-api container (was its own "company" host)
+      COMPANY_URL: ${COMPANY_URL:-http://plumoai-api:3001}
       PORT: ${PORT:-3002}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       AGENT_VERSION: v2
@@ -382,100 +378,6 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ------------------- Milvus (Vector DB, standalone) -------------------
-  # Internal-only: other services can reach it at milvus:19530
-  milvus-etcd:
-    image: quay.io/coreos/etcd:v3.5.25
-    container_name: milvus-etcd
-    restart: unless-stopped
-    environment:
-      ETCD_AUTO_COMPACTION_MODE: revision
-      ETCD_AUTO_COMPACTION_RETENTION: "1000"
-      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
-      ETCD_SNAPSHOT_COUNT: "50000"
-    command:
-      - etcd
-      - -advertise-client-urls=http://milvus-etcd:2379
-      - -listen-client-urls
-      - http://0.0.0.0:2379
-      - --data-dir
-      - /etcd
-    volumes:
-      - milvus_etcd_data:/etcd
-    healthcheck:
-      test: ["CMD", "etcdctl", "endpoint", "health"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-    networks:
-      - internal
-    deploy:
-      resources:
-        limits: { memory: 512M }
-        reservations: { memory: 128M }
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "3" }
-
-  milvus-minio:
-    image: minio/minio:RELEASE.2024-05-28T17-19-04Z
-    container_name: milvus-minio
-    restart: unless-stopped
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    command: ["minio", "server", "/minio_data", "--console-address", ":9001"]
-    volumes:
-      - milvus_minio_data:/minio_data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-    networks:
-      - internal
-    deploy:
-      resources:
-        limits: { memory: 1G }
-        reservations: { memory: 256M }
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "3" }
-
-  milvus:
-    image: milvusdb/milvus:v2.6.14
-    container_name: milvus-standalone
-    restart: unless-stopped
-    command: ["milvus", "run", "standalone"]
-    security_opt:
-      - seccomp:unconfined
-    depends_on:
-      milvus-etcd:
-        condition: service_healthy
-      milvus-minio:
-        condition: service_healthy
-    environment:
-      MINIO_REGION: us-east-1
-      ETCD_ENDPOINTS: milvus-etcd:2379
-      MINIO_ADDRESS: milvus-minio:9000
-    volumes:
-      - milvus_data:/var/lib/milvus
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
-      interval: 30s
-      start_period: 90s
-      timeout: 20s
-      retries: 3
-    networks:
-      - internal
-    deploy:
-      resources:
-        limits: { memory: 2G }
-        reservations: { memory: 512M }
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "3" }
-
 # ------------------- Networks -------------------
 # frontend: normal network so Traefik gets host port bindings (80, 443)
 # internal: isolated (no outbound); backends + Traefik for backend access
@@ -489,9 +391,6 @@ volumes:
   traefik_data:
   mysql_data:
   mongo_data:
-  milvus_etcd_data:
-  milvus_minio_data:
-  milvus_data:
 
 # ------------------- Secrets -------------------
 secrets:
