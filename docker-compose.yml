@@ -190,10 +190,12 @@ services:
     volumes:
       - ./ai-agents:/opt/plumoai/ai-agents:ro
       - ./storage:/opt/plumoai/storage
+      - ./ai-employees:/opt/plumoai/ai-employees
     environment:
       # ---- company-api ----
       PLUMOAI_AI_AGENTS_APPS_PATH: /opt/plumoai/ai-agents
       LOCAL_STORAGE_PATH: /opt/plumoai/storage
+      AI_EMPLOYEES_PATH: /opt/plumoai/ai-employees
       NODE_ENV: production
       # One reverse proxy (Traefik) in front → Express/Nest req.ip / forwarded headers
       TRUST_PROXY: ${TRUST_PROXY:-1}
@@ -210,11 +212,14 @@ services:
       AWS_REGION: ${AWS_REGION}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      LOG_LEVEL: info
       # ---- public-api ----
       AUTH_API_BASE_URL: ${AUTH_API_BASE_URL:-http://auth:3000}
       # company-api is now the SAME container (loopback on :3001), not a separate "company" host
       COMPANY_API_BASE_URL: ${COMPANY_API_BASE_URL:-http://localhost:3001}
-      ENCRYPTION_KEY: ${PLUMOAI_PUBLIC_API_ENCRYPTION_KEY:-PlumoAi@7861}
+      # No fallback on purpose: installers generate a random per-deployment key.
+      # An unset value here is a misconfiguration, not something to paper over with a shared default.
+      ENCRYPTION_KEY: ${PLUMOAI_PUBLIC_API_ENCRYPTION_KEY:?PLUMOAI_PUBLIC_API_ENCRYPTION_KEY is not set — run install.sh/install.ps1, or set it in .env}
     secrets:
       - mysql_db
       - mysql_user
@@ -275,6 +280,7 @@ services:
       COMPANY_URL: ${COMPANY_URL:-http://plumoai-api:3001}
       PORT: ${PORT:-3002}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      AGENT_VERSION: v2
     networks:
       - internal   # talk to auth/company/db services
       - frontend   # reach external APIs (OpenRouter, OpenAI, etc.)

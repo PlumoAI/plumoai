@@ -292,7 +292,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 - Domain mode: `https://<your-domain>`
 - Localhost mode: `http://localhost:7861`
 
-#### Optional: Fresh install (resets MySQL volume)
+#### Optional: Fresh install (backs up, then resets MySQL volume)
 
 ```powershell
 .\install.ps1 -Fresh
@@ -354,7 +354,7 @@ chmod +x install.sh
 - Domain mode: `https://<your-domain>`
 - Localhost mode: `http://localhost:7861`
 
-#### Optional: Fresh install (resets MySQL volume)
+#### Optional: Fresh install (backs up, then resets MySQL volume)
 
 ```bash
 ./install.sh --fresh
@@ -416,7 +416,7 @@ chmod +x install.sh
 - Domain mode: `https://<your-domain>`
 - Localhost mode: `http://localhost:7861`
 
-#### Optional: Fresh install (resets MySQL volume)
+#### Optional: Fresh install (backs up, then resets MySQL volume)
 
 ```bash
 ./install.sh --fresh
@@ -439,6 +439,37 @@ docker compose logs --tail 200 -f traefik
 
 1) Set `PLUMOAI_VERSION` in `.env` (or keep the default).  
 2) Re-run the installer for your OS (it will pull the new images and apply changes).
+
+### Backups
+
+MySQL, MongoDB, and the Traefik TLS certificate store are not backed up automatically outside of `--fresh`/`-Fresh` (which backs up before it wipes the MySQL volume). Take a backup yourself before upgrades or any manual maintenance:
+
+```bash
+# Linux / macOS
+./scripts/backup.sh                 # writes to backups/<timestamp>/
+./scripts/restore.sh backups/<timestamp>
+```
+
+```powershell
+# Windows
+.\scripts\backup.ps1                # writes to backups/<timestamp>/
+.\scripts\restore.ps1 -InDir backups/<timestamp>
+```
+
+Copy the `backups/` folder off the host regularly — a local backup on the same disk doesn't protect against disk failure.
+
+### Optional: Monitoring
+
+An opt-in overlay (`docker-compose.monitoring.yml`) adds Prometheus, Grafana, cAdvisor, and node-exporter — container and host metrics, not started by default:
+
+```bash
+# Set a Grafana admin password first
+echo "GRAFANA_ADMIN_PASSWORD=$(openssl rand -base64 24)" >> .env
+
+docker compose --env-file .env -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+```
+
+Grafana is bound to `127.0.0.1:3001` by default — use an SSH tunnel, or put it behind Traefik with an auth middleware if you need remote access.
 
 ---
 

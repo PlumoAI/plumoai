@@ -1,0 +1,14 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Per-container CPU/memory/network metrics for every service in the stack.
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  # Host-level CPU/memory/disk metrics.
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]

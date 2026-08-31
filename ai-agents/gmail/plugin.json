@@ -3,7 +3,7 @@
   "app_codes": ["gmail"],
   "type": "python_tool_agent",
   "display_name": "Gmail Agent",
-  "description": "Gmail AI Agent allows this AI Digital Employee to securely connect with Gmail and manage email communication using natural language.\r\nThe agent can read, send, reply, draft, label, search, and organize emails, manage attachments, and handle conversations strictly based on the permissions granted to the connected Gmail credentials while maintaining privacy, security, and reliable email operations.",
+  "description": "Gmail AI Agent allows this AI Digital Employee to securely connect with Gmail and manage email communication using natural language. The agent can compose and send new emails, reply to and forward existing messages, create and manage drafts, schedule emails for later delivery, search and read emails, summarize messages and threads, organize with labels and filters, handle attachments, and perform bulk operations — all driven by the user's intent and strictly scoped to the permissions granted to the connected Gmail account.",
   "required_fields": [],
   "service_provider_code": "google",
   "icon": "gmail.svg",

@@ -209,7 +209,8 @@ def _validate_gmail_search(q: Optional[str]) -> bool:
         return False
     if any(q.startswith(op) or f" {op}" in q for op in GMAIL_SEARCH_OPERATORS):
         return True
-    return len(q) <= 200
+    # Allow short plain-text terms (e.g. "meeting notes") but reject long NL sentences
+    return len(q) <= 50
 
 
 def _sanitize_gmail_q(q: str) -> str:
@@ -220,6 +221,19 @@ def _sanitize_gmail_q(q: str) -> str:
 
 def _normalize_gmail_search_fallback(query: str) -> str:
     return _sanitize_gmail_q(query or "")
+
+
+_IDS_FROM_PRIOR_RE = re.compile(r"\s*\[IDs from prior steps:.*$", re.IGNORECASE | re.DOTALL)
+
+
+def _clean_user_query(q: str) -> str:
+    """Strip '[IDs from prior steps: ...]' metadata appended by the agent brain.
+
+    The block is always at the end of the string and may contain nested brackets
+    (e.g. Tags=["PlumoAI"]), so we match from the marker to end-of-string instead
+    of trying to match the closing bracket.
+    """
+    return _IDS_FROM_PRIOR_RE.sub("", q or "").strip()
 
 
 def _extract_email_from_header(header_value: str) -> str:
@@ -1098,7 +1112,8 @@ ACTIONS: list (search emails), read (by message_id), summarize (message or threa
 
     # ----- Intent: single pipeline -----
     async def _build_gmail_search_query(self, user_query: str) -> str:
-        if not (user_query or "").strip():
+        user_query = _clean_user_query(user_query)
+        if not user_query:
             return ""
         prompt = """You are a Gmail search expert. Convert the user request into exactly one Gmail search query.
 
@@ -1109,21 +1124,22 @@ Output rules:
 - Output ONLY the search string, one line, no explanation, no quotes. Do not return empty; use in:inbox when vague.
 
 User request: """
-        prompt += (user_query or "").strip()[:500]
+        prompt += user_query[:500]
         out = await self._llm_generate_text(prompt, max_tokens=150)
         if not out:
-            return _normalize_gmail_search_fallback(user_query)
+            return ""
         out = out.strip().strip('"').strip("'").strip("`").replace("\n", " ").strip()
         if not out or not _validate_gmail_search(out):
-            return _normalize_gmail_search_fallback(user_query)
+            return ""
         return _sanitize_gmail_q(out)
 
     async def _extract_send_params_with_llm(self, user_query: str, step_action: Optional[str] = None) -> Optional[Dict]:
+        user_query = _clean_user_query(user_query)
         context = ("Step/context: " + (step_action or "")[:300] + "\n\n") if step_action else ""
         prompt = f"""Extract recipient email, subject, and body from this request into JSON only.
 Output exactly one JSON object with keys: "to", "subject", "body". Use empty string for missing. No markdown.
 {context}Request:
-{(user_query or "").strip()[:600]}
+{user_query[:600]}
 
 JSON:"""
         out = await self._llm_generate_text(prompt, max_tokens=350)
@@ -1147,19 +1163,17 @@ JSON:"""
         return None
 
     def _draft_summary_from_provided_data(self, provided_data: Any) -> str:
-        """Build a short 'draft from previous step' summary for the LLM so it can output send with subject/body."""
-        if not provided_data or not isinstance(provided_data, list):
+        """
+        Expose the best-scoring email draft from provided_data to the intent LLM as JSON.
+        Uses the same extraction/scoring as send-time merge — no fixed phrases, newlines preserved.
+        """
+        draft_subj, draft_body = self._draft_from_provided_data(provided_data)
+        if not draft_body or self._is_placeholder_content(draft_body):
             return ""
-        for item in provided_data[:3]:
-            if not isinstance(item, dict):
-                continue
-            res = item.get("result") if isinstance(item.get("result"), dict) else item
-            subj = (res.get("subject") or item.get("subject") or "").strip()
-            body = (res.get("body") or res.get("content") or item.get("body") or item.get("content") or "").strip()
-            if subj or body:
-                body_preview = (body or "")[:300].replace("\n", " ")
-                return f"Draft from previous step: subject={subj or '(none)'}, body={body_preview}..."
-        return ""
+        return "Email_draft_from_prior_tools:" + json.dumps(
+            {"subject": draft_subj, "body": draft_body},
+            ensure_ascii=False,
+        )
 
     async def _decide_action_with_llm(
         self,
@@ -1167,6 +1181,7 @@ JSON:"""
         provided_data: Optional[Any],
         tool_args: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict]:
+        user_query = _clean_user_query(user_query)
         step_action = None
         if tool_args and isinstance(tool_args, dict) and tool_args.get("step_action"):
             step_action = str(tool_args.get("step_action"))[:300]
@@ -1177,13 +1192,9 @@ JSON:"""
         if provided_data and isinstance(provided_data, list):
             for item in provided_data[:3]:
                 if isinstance(item, dict):
-                    context_parts.append(
-                        json.dumps({k: v for k, v in item.items() if k in ("message_id", "thread_id", "to", "subject", "body", "content")})
-                    )
-                    # Also include result.subject, result.body if present
-                    res = item.get("result")
-                    if isinstance(res, dict) and (res.get("subject") or res.get("body")):
-                        context_parts.append(json.dumps({"subject": res.get("subject"), "body": (res.get("body") or res.get("content") or "")[:500]}))
+                    slim = {k: v for k, v in item.items() if k in ("message_id", "thread_id", "to")}
+                    if slim:
+                        context_parts.append(json.dumps(slim, ensure_ascii=False))
         if step_action:
             context_parts.append("Step/context: " + step_action)
         context = " | ".join(context_parts) if context_parts else ""
@@ -1248,15 +1259,17 @@ JSON:"""
                     subject = ""
                 if self._is_placeholder_content(body):
                     body = ""
-                if self._step_action_requires_previous_draft(step_action or "", user_query):
-                    draft_subj, draft_body = self._draft_from_provided_data(provided_data)
-                    if draft_subj or draft_body:
-                        subject = draft_subj or subject or "(No subject)"
-                        body = draft_body or body
+                cached_draft: Tuple[str, str] = ("", "")
+                if provided_data:
+                    cached_draft = self._draft_from_provided_data(provided_data)
+                draft_subj, draft_body = cached_draft
                 if (to and "@" in to) and (not subject or not body) and provided_data:
-                    draft_subj, draft_body = self._draft_from_provided_data(provided_data)
                     subject = subject or draft_subj or "(No subject)"
                     body = body or draft_body
+                if to and "@" in to and provided_data and (draft_subj or draft_body):
+                    subject, body = self._resolve_send_subject_body_with_draft(
+                        subject, body, draft_subj, draft_body
+                    )
                 if to and "@" in to and (subject or body):
                     params = {"to": to, "subject": subject or "(No subject)", "body": body or ""}
                     if data.get("cc"):
@@ -1442,6 +1455,39 @@ JSON:"""
             return (best[0] or "(No subject)", best[1] or "")
         return ("", "")
 
+    def _resolve_send_subject_body_with_draft(
+        self,
+        subject: str,
+        body: str,
+        draft_subj: str,
+        draft_body: str,
+    ) -> Tuple[str, str]:
+        """
+        Choose final subject/body for send using only properties of the strings:
+        placeholder checks, _score_email_candidate, newline count, and length.
+        No fixed phrases or tool names.
+        """
+        sub = (subject or "").strip()
+        bod = (body or "").strip()
+        ds = (draft_subj or "").strip()
+        db = (draft_body or "").strip()
+        if not db or self._is_placeholder_content(db):
+            return sub, bod
+        if self._is_placeholder_content(sub):
+            sub = ""
+        if self._is_placeholder_content(bod):
+            bod = ""
+        d_sc = self._score_email_candidate(ds, db)
+        l_sc = self._score_email_candidate(sub, bod)
+        nl_d, nl_b = db.count("\n"), bod.count("\n")
+        if d_sc > l_sc:
+            return (ds or sub).strip() or "(No subject)", db
+        if nl_d > nl_b and len(db) >= len(bod):
+            return (ds or sub).strip() or "(No subject)", db
+        if d_sc == l_sc and d_sc > 0 and len(db) > len(bod):
+            return (ds or sub).strip() or "(No subject)", db
+        return sub, bod
+
     def _is_placeholder_content(self, val: str) -> bool:
         """True if val looks like a placeholder (e.g. '[Content from step 4]'), not real content."""
         if not val or not isinstance(val, str):
@@ -1517,31 +1563,6 @@ JSON:"""
             }
         return True, None
 
-    def _step_action_requires_previous_draft(self, step_action: str, user_query: str) -> bool:
-        """
-        True when instruction implies sending content from a previous step (e.g. AI Writer).
-        Preserve subject/body from provided_data; do not use placeholder or LLM-invented text.
-        """
-        combined = f"{(step_action or '').lower()} {(user_query or '').lower()}"
-        signals = (
-            "from step",
-            "from previous step",
-            "generated in step",
-            "generated from step",
-            "as generated",
-            "body as generated",
-            "use the generated",
-            "send the generated",
-            "send the draft",
-            "send the composed",
-            "body as composed",
-            "composed in step",
-            "retrieved from",
-            "from outreach",
-            "from the outreach",
-        )
-        return any(s in combined for s in signals)
-
     def _step_action_implies_list_or_search(self, step_action: str) -> bool:
         """True if step_action describes listing/searching/finding (not sending). Used to avoid picking send from provided_data."""
         if not (step_action and isinstance(step_action, str)):
@@ -1578,11 +1599,20 @@ JSON:"""
         provided_data: Optional[Any],
         tool_args: Optional[Dict[str, Any]] = None,
     ) -> Dict:
+        # ── Initiation log: show exactly what the tool received ──────────────
+        cleaned_query = _clean_user_query(user_query)
+        logger.info(
+            "GmailTool.init | user_query_raw=%r | user_query_clean=%r | tool_args=%s",
+            (user_query or "")[:500],
+            cleaned_query[:500],
+            json.dumps(tool_args or {}, default=str),
+        )
+        # ─────────────────────────────────────────────────────────────────────
         step_action = (tool_args or {}).get("step_action") if isinstance(tool_args, dict) else None
         step_action_str = (step_action or "") if isinstance(step_action, str) else ""
 
         if tool_args and isinstance(tool_args, dict):
-            to = _normalize_address_list(tool_args.get("to") or tool_args.get("recipient_email"))
+            to = _normalize_address_list(tool_args.get("to") or tool_args.get("recipient_email") or tool_args.get("recipient"))
             subject = (tool_args.get("subject") or tool_args.get("email_subject") or "").strip()
             body = (tool_args.get("body") or tool_args.get("content") or tool_args.get("email_body") or "").strip()
             # Strip placeholder content (e.g. "[Content from step 4]") — use provided_data instead
@@ -1592,15 +1622,16 @@ JSON:"""
                 body = ""
             # Unambiguous send: plan supplied to + (subject or body)
             if to and "@" in to and (subject or body):
-                if self._step_action_requires_previous_draft(step_action_str, user_query):
-                    draft_subj, draft_body = self._draft_from_provided_data(provided_data)
-                    if draft_subj or draft_body:
-                        subject = draft_subj or subject or "(No subject)"
-                        body = draft_body or body
+                draft_subj, draft_body = (
+                    self._draft_from_provided_data(provided_data) if provided_data else ("", "")
+                )
                 if not (subject and body):
-                    draft_subj, draft_body = self._draft_from_provided_data(provided_data)
                     subject = subject or draft_subj or "(No subject)"
                     body = body or draft_body
+                if provided_data and (draft_subj or draft_body):
+                    subject, body = self._resolve_send_subject_body_with_draft(
+                        subject, body, draft_subj, draft_body
+                    )
                 params = {"to": to, "subject": subject or "(No subject)", "body": body or ""}
                 if tool_args.get("cc"):
                     params["cc"] = (tool_args.get("cc") or "").strip()
@@ -1645,6 +1676,16 @@ JSON:"""
             # List Gmail labels (not emails): "list labels", "list existing labels", "verify if label exists"
             if not to and self._implies_list_labels(step_action_str, user_query or ""):
                 return {"action": "list_labels", "params": {}}
+
+            # Unambiguous search: tool_args carries a pre-built valid Gmail search query
+            raw_q = (tool_args.get("query") or tool_args.get("gmail_search_query") or "").strip()
+            if raw_q and _validate_gmail_search(raw_q):
+                try:
+                    max_results = max(5, min(MAX_RESULTS_CAP, int(tool_args.get("max_results") or DEFAULT_MAX_RESULTS)))
+                except (TypeError, ValueError):
+                    max_results = DEFAULT_MAX_RESULTS
+                logger.info("GmailTool.init | path=tool_args_query | q=%r | max_results=%s", raw_q, max_results)
+                return {"action": "list", "params": {"q": raw_q, "query": raw_q, "max_results": max_results}}
 
         # Use LLM for action decision when we have step_action (plan context) or when heuristics didn't match
         if step_action_str or not (tool_args and isinstance(tool_args, dict)):
@@ -2596,59 +2637,6 @@ JSON array:"""
                 return
 
             if action_type == "send":
-                # If body or subject is missing and intent is purely to send, insert an AI Writer
-                # step before this one so content is generated before the send executes.
-                _send_body = (params.get("body") or "").strip()
-                _send_subject = (params.get("subject") or "").strip()
-                _needs_writer = (
-                    not _send_body
-                    or self._is_placeholder_content(_send_body)
-                    or not _send_subject
-                    or self._is_placeholder_content(_send_subject)
-                )
-                if _needs_writer:
-                    _self_name = (
-                        self.app_config.get("custom_name")
-                        or self.app_config.get("app_name")
-                        or "Gmail"
-                    )
-                    _to = (params.get("to") or "").strip()
-                    _writer_hint = _send_subject or _to or "the recipient"
-                    _writer_query = (
-                        f"Write a complete professional email"
-                        + (f" to {_to}" if _to else "")
-                        + (f" with subject '{_send_subject}'" if _send_subject else "")
-                        + f". Original request: {(user_query or '').strip()}"
-                        + ". Include a clear subject line and full body. Output subject and body."
-                    )
-                    _seed: List[Any] = []
-                    if isinstance(provided_data, list):
-                        _seed.extend(x for x in provided_data[:30] if isinstance(x, (dict, list, str, int, float, bool)) or x is None)
-                    elif provided_data is not None:
-                        _seed.append(provided_data)
-                    yield event(AgentEvent.THOUGHT, f"Email content missing — inserting AI Writer step before send.")
-                    yield event(AgentEvent.FINAL, {
-                        "_expand_plan": True,
-                        "router_steps": [
-                            {
-                                "top_level": True,
-                                "tool_name": "AI Writer",
-                                "action": f"Write email: {_writer_hint[:60]}",
-                                "query": _writer_query,
-                                "arguments": {"_provided_data_seed": _seed} if _seed else {},
-                            },
-                            {
-                                "top_level": True,
-                                "tool_name": _self_name,
-                                "action": f"Send email" + (f" to {_to}" if _to else ""),
-                                "query": user_query,
-                                "arguments": {},
-                            },
-                        ],
-                        "success": True,
-                        "response": "Email content missing — AI Writer step inserted to generate subject and body before sending.",
-                    })
-                    return
                 yield event(AgentEvent.PLAN, "Sending the email.")
                 result = await self._do_send(user_query, params)
                 yield event(AgentEvent.RESULT, result)
