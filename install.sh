@@ -347,15 +347,6 @@ else
   set_env_key LOCAL_STORAGE_CONTAINER_PATH "$LOCAL_STORAGE_CONTAINER_PATH"
 fi
 
-PLUMOAI_PUBLIC_API_ENCRYPTION_KEY=$(get_env_value PLUMOAI_PUBLIC_API_ENCRYPTION_KEY)
-if [[ -z "$PLUMOAI_PUBLIC_API_ENCRYPTION_KEY" || "$PLUMOAI_PUBLIC_API_ENCRYPTION_KEY" == *"<"* ]]; then
-  PLUMOAI_PUBLIC_API_ENCRYPTION_KEY=$(openssl rand -base64 32 | tr -d '\n')
-  set_env_key PLUMOAI_PUBLIC_API_ENCRYPTION_KEY "$PLUMOAI_PUBLIC_API_ENCRYPTION_KEY"
-  echo "  Created new PLUMOAI_PUBLIC_API_ENCRYPTION_KEY"
-else
-  echo "  Keeping existing PLUMOAI_PUBLIC_API_ENCRYPTION_KEY"
-fi
-
 echo "Setting up secrets..."
 
 mkdir -p secrets
@@ -383,6 +374,18 @@ if [ ! -f secrets/mongo_password.txt ]; then
 else
   echo "  Keeping existing mongo_password"
 fi
+
+# app_secret: backs PLUMOAI_PUBLIC_API_ENCRYPTION_KEY. Kept as a secrets/*.txt file (same
+# as the DB passwords above) rather than only in .env, so it's covered by the same
+# chmod 600 and isn't the only credential missing from a `secrets/` backup. 12 chars to
+# match the length of the old hardcoded default this replaced ("PlumoAi@7861").
+if [ ! -f secrets/app_secret.txt ]; then
+  openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | head -c 12 > secrets/app_secret.txt
+  echo "  Created new app_secret"
+else
+  echo "  Keeping existing app_secret"
+fi
+set_env_key PLUMOAI_PUBLIC_API_ENCRYPTION_KEY "$(cat secrets/app_secret.txt)"
 
 chmod 600 secrets/* 2>/dev/null || true
 [ -f scripts/mongo-secrets-entrypoint.sh ] && chmod +x scripts/mongo-secrets-entrypoint.sh

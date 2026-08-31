@@ -54,6 +54,12 @@ function New-RandomBase64 {
     return [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }) -as [byte[]])
 }
 
+function New-RandomAlnum {
+    param([int]$Length = 12)
+    $chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+    return -join (1..$Length | ForEach-Object { $chars[(Get-Random -Maximum $chars.Length)] })
+}
+
 # .env location
 $ENV_FILE = $null
 if (Test-Path "../.env") { $ENV_FILE = (Resolve-Path "../.env").Path }
@@ -285,15 +291,6 @@ if ($STORAGE_BACKEND -eq "s3") {
     Set-EnvValue $ENV_FILE "LOCAL_STORAGE_CONTAINER_PATH" $containerPath
 }
 
-$PLUMOAI_PUBLIC_API_ENCRYPTION_KEY = Get-EnvValue $ENV_FILE "PLUMOAI_PUBLIC_API_ENCRYPTION_KEY"
-if ([string]::IsNullOrWhiteSpace($PLUMOAI_PUBLIC_API_ENCRYPTION_KEY) -or ($PLUMOAI_PUBLIC_API_ENCRYPTION_KEY -like "*<*")) {
-    $PLUMOAI_PUBLIC_API_ENCRYPTION_KEY = New-RandomBase64
-    Set-EnvValue $ENV_FILE "PLUMOAI_PUBLIC_API_ENCRYPTION_KEY" $PLUMOAI_PUBLIC_API_ENCRYPTION_KEY
-    Write-Host "  Created new PLUMOAI_PUBLIC_API_ENCRYPTION_KEY"
-} else {
-    Write-Host "  Keeping existing PLUMOAI_PUBLIC_API_ENCRYPTION_KEY"
-}
-
 Write-Host "Setting up secrets..." -ForegroundColor Cyan
 New-Item -ItemType Directory -Force -Path "secrets" | Out-Null
 
@@ -318,6 +315,18 @@ foreach ($s in $secrets) {
         Write-Host "  Keeping existing $($s.Name)"
     }
 }
+
+# app_secret: backs PLUMOAI_PUBLIC_API_ENCRYPTION_KEY. Kept as a secrets/*.txt file (same
+# as the DB passwords above) rather than only in .env. 12 chars to match the length of
+# the old hardcoded default this replaced ("PlumoAi@7861").
+$appSecretPath = Join-Path "secrets" "app_secret.txt"
+if (!(Test-Path $appSecretPath)) {
+    New-RandomAlnum -Length 12 | Out-File -FilePath $appSecretPath -Encoding ascii -NoNewline
+    Write-Host "  Created new app_secret"
+} else {
+    Write-Host "  Keeping existing app_secret"
+}
+Set-EnvValue $ENV_FILE "PLUMOAI_PUBLIC_API_ENCRYPTION_KEY" (Get-Content $appSecretPath -Raw)
 
 # Docker bind-mounts .sh from Windows with CRLF: dash sees "set -e^M" -> "set: Illegal option -". Force LF.
 function Repair-DockerMountLineEndings {
