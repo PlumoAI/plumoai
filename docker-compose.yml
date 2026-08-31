@@ -272,8 +272,10 @@ services:
       AUTH_API_BASE_URL: ${AUTH_API_BASE_URL:-http://auth:3000}
       # company-api is now the SAME container (loopback on :3001), not a separate "company" host
       COMPANY_API_BASE_URL: ${COMPANY_API_BASE_URL:-http://localhost:3001}
-      # No fallback on purpose: installers generate a random per-deployment key.
-      # An unset value here is a misconfiguration, not something to paper over with a shared default.
+      # No fallback on purpose: installers generate a random per-deployment key into
+      # secrets/app_secret.txt (same pattern as the DB passwords) and copy it into .env
+      # here. An unset value is a misconfiguration, not something to paper over with a
+      # shared default.
       ENCRYPTION_KEY: ${PLUMOAI_PUBLIC_API_ENCRYPTION_KEY:?PLUMOAI_PUBLIC_API_ENCRYPTION_KEY is not set — run install.sh/install.ps1, or set it in .env}
     secrets:
       - mysql_db
