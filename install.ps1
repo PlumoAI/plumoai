@@ -55,8 +55,8 @@ function New-RandomBase64 {
 }
 
 function New-RandomAlnum {
-    param([int]$Length = 12)
-    $chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+    param([int]$Length = 37)
+    $chars = "abcdefghijklmnopqrstuvwxyz0123456789"
     return -join (1..$Length | ForEach-Object { $chars[(Get-Random -Maximum $chars.Length)] })
 }
 
@@ -317,11 +317,10 @@ foreach ($s in $secrets) {
 }
 
 # app_secret: backs PLUMOAI_PUBLIC_API_ENCRYPTION_KEY. Kept as a secrets/*.txt file (same
-# as the DB passwords above) rather than only in .env. 12 chars to match the length of
-# the old hardcoded default this replaced ("PlumoAi@7861").
+# as the DB passwords above) rather than only in .env. 37 lowercase alnum chars.
 $appSecretPath = Join-Path "secrets" "app_secret.txt"
 if (!(Test-Path $appSecretPath)) {
-    New-RandomAlnum -Length 12 | Out-File -FilePath $appSecretPath -Encoding ascii -NoNewline
+    New-RandomAlnum -Length 37 | Out-File -FilePath $appSecretPath -Encoding ascii -NoNewline
     Write-Host "  Created new app_secret"
 } else {
     Write-Host "  Keeping existing app_secret"

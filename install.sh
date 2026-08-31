@@ -377,10 +377,11 @@ fi
 
 # app_secret: backs PLUMOAI_PUBLIC_API_ENCRYPTION_KEY. Kept as a secrets/*.txt file (same
 # as the DB passwords above) rather than only in .env, so it's covered by the same
-# chmod 600 and isn't the only credential missing from a `secrets/` backup. 12 chars to
-# match the length of the old hardcoded default this replaced ("PlumoAi@7861").
+# chmod 600 and isn't the only credential missing from a `secrets/` backup. 37 lowercase
+# alnum chars — long enough to be a real secret, not just matching the old hardcoded
+# default's short length.
 if [ ! -f secrets/app_secret.txt ]; then
-  openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | head -c 12 > secrets/app_secret.txt
+  openssl rand -base64 96 | tr -dc 'a-z0-9' | head -c 37 > secrets/app_secret.txt
   echo "  Created new app_secret"
 else
   echo "  Keeping existing app_secret"
