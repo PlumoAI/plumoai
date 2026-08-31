@@ -2,19 +2,33 @@ services:
   # ------------------- Docker socket proxy -------------------
   # Traefik needs to read container labels to build its routing config, but it doesn't
   # need the full Docker API. This proxy holds the real socket and exposes only the
-  # read-only endpoints Traefik's docker provider actually calls (containers, networks),
-  # with POST disabled — so a compromised Traefik container can't use the socket to
-  # escalate into full Docker control on the host.
+  # read-only paths Traefik's docker provider actually calls (container list/inspect,
+  # network inspect, the events stream for live updates), with no write methods allowed
+  # at all — so a compromised Traefik container can't use the socket to escalate into
+  # full Docker control on the host.
+  #
+  # tecnativa/docker-socket-proxy is NOT used here: its proxy denies every request that
+  # isn't GET or POST, including the HEAD /_ping handshake Traefik >=3.6.1 sends first —
+  # that HEAD gets denied, Traefik silently falls back to a stale Docker API version, its
+  # docker provider then discovers zero routers, and every request 404s ("page not
+  # found" is Traefik's own fallback response when nothing matches). wollomatic/socket-proxy
+  # explicitly supports allowing that HEAD request.
   docker-socket-proxy:
-    image: tecnativa/docker-socket-proxy:0.3.0
+    image: wollomatic/socket-proxy:1
     container_name: docker-socket-proxy
     restart: unless-stopped
-    environment:
-      CONTAINERS: 1
-      NETWORKS: 1
-      SERVICES: 0
-      TASKS: 0
-      POST: 0
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges
+    command:
+      - "-loglevel=info"
+      - "-listenip=0.0.0.0"
+      - "-proxyport=2375"
+      - "-allowfrom=traefik"
+      - "-allowGET=/v[0-9.]+/(version|containers/.*|networks.*|events.*)"
+      - "-allowHEAD=/_ping"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
