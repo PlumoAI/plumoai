@@ -27,7 +27,7 @@
       "config": {
         "cal_event_trigger": "BOOKING_CREATED",
         "subscriber_url": "https://api.plumoai.com/company/aiagentchat/workflow/trigger-callback/calcom",
-        "webhook_secret": "4265ff742c12459ab2a7eacbe68b02a9"
+        "webhook_secret": ""
       }
     },
     {
@@ -48,7 +48,7 @@
       "config": {
         "cal_event_trigger": "BOOKING_CANCELLED",
         "subscriber_url": "https://api.plumoai.com/company/aiagentchat/workflow/trigger-callback/calcom",
-        "webhook_secret": "4265ff742c12459ab2a7eacbe68b02a9"
+        "webhook_secret": ""
       }
     },
     {
@@ -69,7 +69,7 @@
       "config": {
         "cal_event_trigger": "BOOKING_RESCHEDULED",
         "subscriber_url": "https://api.plumoai.com/company/aiagentchat/workflow/trigger-callback/calcom",
-        "webhook_secret": "4265ff742c12459ab2a7eacbe68b02a9"
+        "webhook_secret": ""
       }
     },
     {
@@ -90,7 +90,7 @@
       "config": {
         "cal_event_trigger": "MEETING_ENDED",
         "subscriber_url": "https://api.plumoai.com/company/aiagentchat/workflow/trigger-callback/calcom",
-        "webhook_secret": "4265ff742c12459ab2a7eacbe68b02a9"
+        "webhook_secret": ""
       }
     }
   ],
