@@ -34,7 +34,7 @@
       },
       "config": {
         "record_events": ["created"],
-        "subscriber_url": "https://api.plumoai.com/company/aiagentchat/workflow/trigger-callback/plumoai",
+        "subscriber_url": "",
         "webhook_secret": ""
       }
     },
@@ -60,7 +60,7 @@
       },
       "config": {
         "record_events": ["updated"],
-        "subscriber_url": "https://api.plumoai.com/company/aiagentchat/workflow/trigger-callback/plumoai",
+        "subscriber_url": "",
         "webhook_secret": ""
       }
     },
@@ -86,7 +86,7 @@
       },
       "config": {
         "record_events": ["created", "updated"],
-        "subscriber_url": "https://api.plumoai.com/company/aiagentchat/workflow/trigger-callback/plumoai",
+        "subscriber_url": "",
         "webhook_secret": ""
       }
     }

@@ -33,7 +33,7 @@
         "required": ["event_types"]
       },
       "config": {
-        "subscriber_url": "https://api.plumoai.com/company/aiagentchat/workflow/trigger-callback/sendgrid"
+        "subscriber_url": ""
       }
     },
     {
@@ -60,7 +60,7 @@
         "required": ["hostname"]
       },
       "config": {
-        "subscriber_url": "https://api.plumoai.com/company/aiagentchat/workflow/trigger-callback/sendgrid"
+        "subscriber_url": ""
       }
     }
   ],
