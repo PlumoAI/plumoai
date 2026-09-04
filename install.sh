@@ -299,6 +299,43 @@ if openai_kb_key_needs_prompt "$OPENAI_API_KEY_KNOWLEDGEBASE" && [ -t 0 ]; then
   fi
 fi
 
+ai_provider_needs_prompt() {
+  local v="$1"
+  [[ -z "$v" || "$v" == *"<"* ]]
+}
+
+AI_PROVIDER=$(get_env_value AI_PROVIDER)
+
+# Optional: default LLM provider/model for the AI service (voice/knowledgebase agents).
+# If skipped, the AI service auto-picks whichever provider below actually has a key configured.
+if [ -t 0 ] && ai_provider_needs_prompt "$AI_PROVIDER"; then
+  echo ""
+  echo "Default LLM Provider:"
+  echo "  1) OpenRouter (default)"
+  echo "  2) OpenAI"
+  echo "  3) Skip for now (auto-picks whichever key below is set; edit .env later)"
+  read -r -p "Choose [1/2/3] (Enter = 1): " llm_choice
+  case "${llm_choice:-1}" in
+    2)
+      set_env_key AI_PROVIDER "openai"
+      read -r -p "OPENAI_API_KEY: " oa_key
+      [[ -n "$oa_key" ]] && set_env_key OPENAI_API_KEY "$oa_key"
+      read -r -p "OPENAI_MODEL [gpt-4o-mini]: " oa_model
+      set_env_key OPENAI_MODEL "${oa_model:-gpt-4o-mini}"
+      ;;
+    3)
+      : # leave AI_PROVIDER unset; AI service auto-detects from whichever key is present
+      ;;
+    *)
+      set_env_key AI_PROVIDER "openrouter"
+      read -r -p "OPENROUTER_API_KEY: " or_key
+      [[ -n "$or_key" ]] && set_env_key OPENROUTER_API_KEY "$or_key"
+      read -r -p "OPENROUTER_MODEL [openai/gpt-4o-mini]: " or_model
+      set_env_key OPENROUTER_MODEL "${or_model:-openai/gpt-4o-mini}"
+      ;;
+  esac
+fi
+
 if [ -t 0 ] && storage_backend_needs_prompt "$STORAGE_BACKEND"; then
   echo ""
   echo "File storage (company service uploads):"

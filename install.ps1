@@ -246,6 +246,45 @@ if ([Environment]::UserInteractive -and (Test-Placeholder $OPENAI_API_KEY_KNOWLE
     }
 }
 
+function Test-AiProviderNeedsPrompt {
+    param([string]$Val)
+    return [string]::IsNullOrWhiteSpace($Val) -or ($Val -like "*<*")
+}
+
+$AI_PROVIDER = Get-EnvValue $ENV_FILE "AI_PROVIDER"
+
+# Optional: default LLM provider/model for the AI service (voice/knowledgebase agents).
+# If skipped, the AI service auto-picks whichever provider below actually has a key configured.
+if ([Environment]::UserInteractive -and (Test-AiProviderNeedsPrompt $AI_PROVIDER)) {
+    Write-Host ""
+    Write-Host "Default LLM Provider:"
+    Write-Host "  1) OpenRouter (default)"
+    Write-Host "  2) OpenAI"
+    Write-Host "  3) Skip for now (auto-picks whichever key below is set; edit .env later)"
+    $llmChoice = Read-Host "Choose [1/2/3] (Enter = 1)"
+    switch ($llmChoice) {
+        "2" {
+            Set-EnvValue $ENV_FILE "AI_PROVIDER" "openai"
+            $oaKey = Read-Host "OPENAI_API_KEY"
+            if (![string]::IsNullOrWhiteSpace($oaKey)) { Set-EnvValue $ENV_FILE "OPENAI_API_KEY" $oaKey }
+            $oaModel = Read-Host "OPENAI_MODEL [gpt-4o-mini]"
+            if ([string]::IsNullOrWhiteSpace($oaModel)) { $oaModel = "gpt-4o-mini" }
+            Set-EnvValue $ENV_FILE "OPENAI_MODEL" $oaModel
+        }
+        "3" {
+            # leave AI_PROVIDER unset; AI service auto-detects from whichever key is present
+        }
+        default {
+            Set-EnvValue $ENV_FILE "AI_PROVIDER" "openrouter"
+            $orKey = Read-Host "OPENROUTER_API_KEY"
+            if (![string]::IsNullOrWhiteSpace($orKey)) { Set-EnvValue $ENV_FILE "OPENROUTER_API_KEY" $orKey }
+            $orModel = Read-Host "OPENROUTER_MODEL [openai/gpt-4o-mini]"
+            if ([string]::IsNullOrWhiteSpace($orModel)) { $orModel = "openai/gpt-4o-mini" }
+            Set-EnvValue $ENV_FILE "OPENROUTER_MODEL" $orModel
+        }
+    }
+}
+
 $STORAGE_BACKEND = Get-EnvValue $ENV_FILE "STORAGE_BACKEND"
 $LOCAL_STORAGE_HOST_PATH = Get-EnvValue $ENV_FILE "LOCAL_STORAGE_HOST_PATH"
 $LOCAL_STORAGE_CONTAINER_PATH = Get-EnvValue $ENV_FILE "LOCAL_STORAGE_CONTAINER_PATH"
