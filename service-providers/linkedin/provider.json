@@ -1,0 +1,19 @@
+{
+  "name": "LinkedIn",
+  "code": "linkedin",
+  "auth_type": "oauth2",
+  "required_fields": [
+    { "key": "client_id", "type": "text", "label": "Client ID" },
+    { "key": "client_secret", "type": "text", "label": "Client Secret" }
+  ],
+  "config": {
+    "scope": "w_member_social r_member_postAnalytics r_organization_followers r_organization_social rw_organization_admin r_organization_social_feed r_member_profileAnalytics w_organization_social r_basicprofile w_organization_social_feed w_member_social_feed r_1st_connections_size",
+    "authorization_endpoint": "https://www.linkedin.com/oauth/v2/authorization",
+    "token_endpoint": "https://www.linkedin.com/oauth/v2/accessToken",
+    "access_type": "offline",
+    "grant_types": ["authorization_code", "refresh_token"],
+    "is_client_registration_required": false,
+    "use_pkce": false
+  },
+  "is_active": true
+}

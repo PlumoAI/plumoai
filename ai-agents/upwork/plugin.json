@@ -1,0 +1,12 @@
+{
+  "plugin_id": "upwork",
+  "app_codes": ["upwork"],
+  "type": "mcp_wrapper",
+  "display_name": "Upwork Agent",
+  "description": "Upwork's official MCP server, letting this AI Digital Employee work with Upwork on the connected user's behalf: pull the account dashboard, search and shortlist freelancers, post and manage jobs, invite freelancers and review proposals, respond to invitations/offers and prepare offers, manage contracts and milestones, read financials and time reports, message freelancers or clients, manage talent lists, and handle file attachments -- strictly based on the permissions of the connected Upwork account. Every write action is a draft the user confirms separately; binding actions (offers, milestone funding) complete on upwork.com.",
+  "required_fields": [],
+  "service_provider_code": "upwork",
+  "icon": "upwork.svg",
+  "mcp_url": "https://mcp.upwork.com/mcp",
+  "server_type": "http"
+}

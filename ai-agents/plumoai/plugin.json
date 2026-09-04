@@ -2,9 +2,151 @@
   "plugin_id": "plumoai",
   "app_codes": ["plumoai"],
   "type": "mcp_wrapper",
-  "display_name": "PlumoAI",
-  "description": "PlumoAI AI Agent allows this AI Digital Employee to securely interact with the PlumoAI platform Projects, Tables, Web Documents, coordinate AI Employees, workflows, and internal resources using natural language. The agent can read and write data strictly based on the permissions granted to the connected PlumoAI credentials while enforcing organization, workspace, and role based access controls.",
+  "display_name": "PlumoAi",
+  "description": "PlumoAI's own AI Employees/CRM product exposed as an MCP server: workspaces, AI Employees, tables (work item types), pipelines, workflow statuses, and records. Lets this AI Digital Employee list AI Employees, inspect table/pipeline/status structure, and list/create/update/comment on records, strictly based on the permissions of the connected plumoai credentials.",
+  "required_fields": [],
+  "service_provider_code": "plumoai",
+  "config": {
+    "server_type": "http",
+    "url": "https://mcp.plumoai.com/mcp"
+  },
   "entrypoint": "entrypoint.py",
-  "service_provider_code": "plumoai"
+  "triggers": [
+    {
+      "trigger_id": "plumoai_record_created",
+      "display_name": "On Record Created",
+      "description": "Fires when a new record is created on the selected AI Employee/table. Requires the PlumoAI platform's record-events webhook (already configured platform-side) pointed at this trigger's callback endpoint -- this trigger does not create that webhook itself.",
+      "entrypoint": "trigger_entrypoint.py",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "ai_employee_id": { "type": "string", "description": "PlumoAI AI Employee to scope this trigger to." },
+          "table_id": { "type": "string", "description": "Table (work item type) within the selected AI Employee to scope this trigger to." },
+          "record_events": {
+            "type": "array",
+            "description": "Which record event(s) should fire this trigger. Select one or more.",
+            "items": { "type": "string", "enum": ["created", "updated"] },
+            "minItems": 1,
+            "default": ["created"]
+          }
+        },
+        "required": ["ai_employee_id", "table_id"]
+      },
+      "config": {
+        "record_events": ["created"],
+        "subscriber_url": "https://api.plumoai.com/company/aiagentchat/workflow/trigger-callback/plumoai",
+        "webhook_secret": ""
+      }
+    },
+    {
+      "trigger_id": "plumoai_record_updated",
+      "display_name": "On Record Updated",
+      "description": "Fires when an existing record is updated (fields and/or workflow status) on the selected AI Employee/table. Requires the PlumoAI platform's record-events webhook (already configured platform-side) pointed at this trigger's callback endpoint -- this trigger does not create that webhook itself.",
+      "entrypoint": "trigger_entrypoint.py",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "ai_employee_id": { "type": "string", "description": "PlumoAI AI Employee to scope this trigger to." },
+          "table_id": { "type": "string", "description": "Table (work item type) within the selected AI Employee to scope this trigger to." },
+          "record_events": {
+            "type": "array",
+            "description": "Which record event(s) should fire this trigger. Select one or more.",
+            "items": { "type": "string", "enum": ["created", "updated"] },
+            "minItems": 1,
+            "default": ["updated"]
+          }
+        },
+        "required": ["ai_employee_id", "table_id"]
+      },
+      "config": {
+        "record_events": ["updated"],
+        "subscriber_url": "https://api.plumoai.com/company/aiagentchat/workflow/trigger-callback/plumoai",
+        "webhook_secret": ""
+      }
+    },
+    {
+      "trigger_id": "plumoai_record_created_or_updated",
+      "display_name": "On Record Created or Updated",
+      "description": "Fires when a record on the selected AI Employee/table is either created or updated. Requires the PlumoAI platform's record-events webhook (already configured platform-side) pointed at this trigger's callback endpoint -- this trigger does not create that webhook itself.",
+      "entrypoint": "trigger_entrypoint.py",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "ai_employee_id": { "type": "string", "description": "PlumoAI AI Employee to scope this trigger to." },
+          "table_id": { "type": "string", "description": "Table (work item type) within the selected AI Employee to scope this trigger to." },
+          "record_events": {
+            "type": "array",
+            "description": "Which record event(s) should fire this trigger. Select one or more.",
+            "items": { "type": "string", "enum": ["created", "updated"] },
+            "minItems": 1,
+            "default": ["created", "updated"]
+          }
+        },
+        "required": ["ai_employee_id", "table_id"]
+      },
+      "config": {
+        "record_events": ["created", "updated"],
+        "subscriber_url": "https://api.plumoai.com/company/aiagentchat/workflow/trigger-callback/plumoai",
+        "webhook_secret": ""
+      }
+    }
+  ],
+  "param_options": {
+    "plumoai_record_created": {
+      "ai_employee_id": { "depends_on": [], "description": "The user's AI Employees" },
+      "table_id": { "depends_on": ["ai_employee_id"], "description": "Tables (work item types) in the selected AI Employee" }
+    },
+    "plumoai_record_updated": {
+      "ai_employee_id": { "depends_on": [], "description": "The user's AI Employees" },
+      "table_id": { "depends_on": ["ai_employee_id"], "description": "Tables (work item types) in the selected AI Employee" }
+    },
+    "plumoai_record_created_or_updated": {
+      "ai_employee_id": { "depends_on": [], "description": "The user's AI Employees" },
+      "table_id": { "depends_on": ["ai_employee_id"], "description": "Tables (work item types) in the selected AI Employee" }
+    },
+    "ai_employee_list": {
+      "workspace_id": { "depends_on": [], "description": "Workspaces available to this connection" }
+    },
+    "ai_employee_tables_list": {
+      "aiEmployeeId": { "depends_on": [], "description": "The user's AI Employees" }
+    },
+    "ai_employee_table_fields": {
+      "ai_employee_id": { "depends_on": [], "description": "The user's AI Employees" },
+      "table_id": { "depends_on": ["ai_employee_id"], "description": "Tables (work item types) in the selected AI Employee" }
+    },
+    "ai_employee_table_pipelines": {
+      "aiEmployeeId": { "depends_on": [], "description": "The user's AI Employees" },
+      "tableId": { "depends_on": ["aiEmployeeId"], "description": "Tables (work item types) in the selected AI Employee" }
+    },
+    "ai_employee_table_pipeline_status_list": {
+      "aiEmployeeId": { "depends_on": [], "description": "The user's AI Employees" },
+      "tableId": { "depends_on": ["aiEmployeeId"], "description": "Tables (work item types) in the selected AI Employee" },
+      "pipelineId": { "depends_on": ["aiEmployeeId", "tableId"], "description": "Pipelines on the selected table" }
+    },
+    "record_list": {
+      "ai_employee_id": { "depends_on": [], "description": "The user's AI Employees" },
+      "table_id": { "depends_on": ["ai_employee_id"], "description": "Tables (work item types) in the selected AI Employee" },
+      "pipeline_id": { "depends_on": ["ai_employee_id", "table_id"], "description": "Pipelines on the selected table" },
+      "status_id": { "depends_on": ["ai_employee_id", "table_id", "pipeline_id"], "description": "Workflow statuses on the selected pipeline" },
+      "filter.conditions.field_id": { "depends_on": ["ai_employee_id", "table_id"], "description": "Fields available on the selected table" }
+    },
+    "record_create": {
+      "ai_employee_id": { "depends_on": [], "description": "The user's AI Employees" },
+      "table_id": { "depends_on": ["ai_employee_id"], "description": "Tables (work item types) in the selected AI Employee" },
+      "status_id": { "depends_on": ["ai_employee_id", "table_id"], "description": "Workflow statuses available on the selected table" },
+      "recordFieldValues.field_id": { "depends_on": ["ai_employee_id", "table_id"], "description": "Fields available on the selected table" }
+    },
+    "record_update": {
+      "ai_employee_id": { "depends_on": [], "description": "The user's AI Employees" },
+      "table_id": { "depends_on": ["ai_employee_id"], "description": "Tables (work item types) in the selected AI Employee" },
+      "status_id": { "depends_on": ["ai_employee_id", "table_id"], "description": "Workflow statuses available on the selected table" },
+      "recordFieldValues.field_id": { "depends_on": ["ai_employee_id", "table_id"], "description": "Fields available on the selected table" }
+    },
+    "record_bulk_create": {
+      "ai_employee_id": { "depends_on": [], "description": "The user's AI Employees" },
+      "table_id": { "depends_on": ["ai_employee_id"], "description": "Tables (work item types) in the selected AI Employee" },
+      "status_id": { "depends_on": ["ai_employee_id", "table_id"], "description": "Workflow statuses available on the selected table" },
+      "records.recordFieldValues.field_id": { "depends_on": ["ai_employee_id", "table_id"], "description": "Fields available on the selected table" }
+    }
+  }
 }
-

@@ -1,0 +1,12 @@
+{
+  "name": "SendGrid",
+  "code": "sendgrid",
+  "auth_type": "custom",
+  "required_fields": [
+    { "key": "api_key", "type": "password", "label": "API Key" },
+    { "key": "default_from_email", "type": "text", "label": "Default From Email (optional)" },
+    { "key": "default_from_name", "type": "text", "label": "Default From Name (optional)" }
+  ],
+  "config": {},
+  "is_active": true
+}

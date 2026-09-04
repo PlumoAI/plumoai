@@ -7,13 +7,13 @@
     { "key": "client_secret", "type": "text", "label": "Client Secret" }
   ],
   "config": {
-    "scope": "https://www.googleapis.com/auth/calendar https://mail.google.com/",
+    "scope": "https://www.googleapis.com/auth/calendar https://mail.google.com/ https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.force-ssl https://www.googleapis.com/auth/chat.spaces https://www.googleapis.com/auth/chat.messages https://www.googleapis.com/auth/chat.messages.reactions https://www.googleapis.com/auth/chat.memberships https://www.googleapis.com/auth/chat.customemojis",
     "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
     "token_endpoint": "https://oauth2.googleapis.com/token",
     "access_type": "offline",
     "grant_types": ["authorization_code", "refresh_token"],
     "is_client_registration_required": false
   },
-  "icon": "./google.svg"
+  "is_active": true
 }
 

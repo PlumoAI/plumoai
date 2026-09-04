@@ -1,0 +1,16 @@
+{
+  "name": "Upwork",
+  "code": "upwork",
+  "auth_type": "oauth2",
+  "required_fields": [],
+  "config": {
+    "authorization_endpoint": "https://www.upwork.com/ab/account-security/oauth2/authorize",
+    "resource": "https://mcp.upwork.com/mcp",
+    "token_endpoint": "https://www.upwork.com/api/v3/oauth2/token",
+    "revocation_endpoint": "https://www.upwork.com/api/v3/oauth2/token/revoke",
+    "grantTypes": ["authorization_code", "refresh_token"],
+    "registration_endpoint": "https://www.upwork.com/register",
+    "isClientRegistrationRequired": true
+  },
+  "is_active": true
+}

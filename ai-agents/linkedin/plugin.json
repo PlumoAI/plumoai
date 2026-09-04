@@ -1,0 +1,10 @@
+{
+  "plugin_id": "linkedin",
+  "app_codes": ["linkedin"],
+  "type": "functions_wrapper",
+  "display_name": "LinkedIn Agent",
+  "description": "Manages LinkedIn posts, comments, reactions, events, and organization pages via the LinkedIn REST API. Supports creating and publishing content, engaging with posts, managing company page events, retrieving member/organization profiles, and pulling member post/follower analytics and connection counts.",
+  "required_fields": [],
+  "service_provider_code": "linkedin",
+  "entrypoint": "entrypoint.py"
+}

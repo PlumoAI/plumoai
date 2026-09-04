@@ -1,0 +1,9 @@
+{
+  "plugin_id": "imagegen",
+  "app_codes": ["imagegen"],
+  "type": "python_tool_agent",
+  "display_name": "Image Generation",
+  "description": "Generate images from text descriptions using AI image models (OpenAI DALL-E / GPT-Image or OpenRouter image models). Provide a detailed prompt describing the image you want to create.",
+  "entrypoint": "entrypoint.py",
+  "auto_attach_to_all_agents": false
+}

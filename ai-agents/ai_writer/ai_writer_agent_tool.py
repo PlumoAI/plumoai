@@ -129,6 +129,50 @@ USE WHEN:
         self._employee_identity = (app_config or {}).get("employee_identity") or {}
         if not isinstance(self._employee_identity, dict):
             self._employee_identity = {}
+        # Behavioral rules extracted from user_query each run; injected into every LLM system prompt
+        self._behavioral_rules_str: str = ""
+
+    def _extract_behavioral_rules(self, user_query: str) -> str:
+        """
+        Extract behavioral/preference rule blocks from user_query so they can be
+        promoted to the system prompt of every LLM call instead of sitting in user context.
+
+        Recognised block headers (injected by the runner):
+          [Stored preferences / behavioral rules]
+          [AI Writer preferences]
+
+        Any content between a recognised header and the next header (or end of string)
+        is captured. Returns a concatenated string, or "" when nothing is found.
+        """
+        text = user_query or ""
+        _headers = [
+            "[Stored preferences / behavioral rules]",
+            "[AI Writer preferences]",
+        ]
+        collected: list[str] = []
+        for header in _headers:
+            idx = text.find(header)
+            if idx < 0:
+                continue
+            # Content starts after the header line
+            content_start = idx + len(header)
+            # Find the next recognised header (or end of string)
+            next_idx = len(text)
+            for other in _headers:
+                if other == header:
+                    continue
+                pos = text.find(other, content_start)
+                if pos >= 0 and pos < next_idx:
+                    next_idx = pos
+            # Also stop at common runner section separators
+            for sep in ("\n[", "\n---"):
+                pos = text.find(sep, content_start)
+                if pos >= 0 and pos < next_idx:
+                    next_idx = pos
+            block = text[content_start:next_idx].strip()
+            if block:
+                collected.append(block)
+        return "\n".join(collected)
 
     def _get_identity_for_draft(self, tool_args: Optional[Dict]) -> Optional[str]:
         """
@@ -204,9 +248,15 @@ USE WHEN:
         if not self.llm_provider or not getattr(self.llm_provider, "get_response", None):
             return None
         try:
+            _base_system = "You are a concise professional writing assistant. Follow instructions exactly."
+            if self._behavioral_rules_str:
+                _base_system = (
+                    f"{_base_system}\n\n## Behavioral rules (always enforced — highest priority)\n"
+                    f"{self._behavioral_rules_str}"
+                )
             result = await self.llm_provider.get_response(
                 transcript=prompt,
-                system_prompt="You are a concise professional writing assistant. Follow instructions exactly.",
+                system_prompt=_base_system,
                 max_tokens=max_tokens,
             )
             if result is None:
@@ -867,56 +917,25 @@ Thread summary:"""
             return s
         return s[: max_chars - 50] + "\n\n[... context truncated for length ...]"
 
-    def _extract_forbidden_phrases(self) -> List[str]:
-        """
-        Extract forbidden phrases from the system prompt/memory rules.
-
-        This is intentionally dynamic: it reads whatever policy text is present
-        (e.g. "X must never be mentioned") and converts it into a runtime
-        redaction list. No hardcoded entities.
-        """
-        sp = (self._system_prompt or "").strip()
-        if not sp:
-            return []
-        phrases: List[str] = []
-        # Pattern: "<thing> must never be mentioned"
-        for m in re.finditer(r"(?im)^[\\s\\-•]*([^\n]{2,80}?)\\s+must\\s+never\\s+be\\s+mentioned\\b", sp):
-            cand = (m.group(1) or "").strip().strip('"').strip("'").strip()
-            if cand and cand.lower() not in {"it", "this", "that"}:
-                phrases.append(cand)
-        # De-dupe while preserving order
-        out: List[str] = []
-        seen = set()
-        for p in phrases:
-            k = p.lower()
-            if k not in seen:
-                seen.add(k)
-                out.append(p)
-        return out[:12]
-
-    def _redact_forbidden_phrases(self, text: str) -> str:
-        if not text:
-            return ""
-        phrases = self._extract_forbidden_phrases()
-        if not phrases:
-            return text
-        redacted = text
-        for p in phrases:
-            try:
-                redacted = re.sub(re.escape(p), "[redacted]", redacted, flags=re.IGNORECASE)
-            except Exception:
-                # Never fail the writer due to a regex edge-case
-                redacted = redacted.replace(p, "[redacted]")
-        return redacted
-
     def _format_provided_data_by_source(self, provided_data: Any) -> str:
-        """Format provided_data from other apps (Gmail, KB, MCP) for the draft prompt."""
+        """Format provided_data from other apps (Gmail, KB, MCP, KB-chunks) for the draft prompt.
+
+        Handles all known shapes dynamically:
+          - Gmail messages list
+          - Knowledgebase answer/data
+          - KB search results wrapper (results:[{chunk_text, title, ...}])
+          - KB chunk rows (chunk_text + title)
+          - MCP / generic response
+          - Nested result wrappers
+          - Fallback key-value subset
+        """
         if not provided_data or not isinstance(provided_data, list):
             return ""
         parts = []
-        for i, item in enumerate(provided_data[:10]):
+        for i, item in enumerate(provided_data[:15]):
             if not isinstance(item, dict):
                 continue
+
             # Gmail-style: messages list
             if "messages" in item and isinstance(item["messages"], list):
                 emails = item["messages"][:5]
@@ -924,24 +943,88 @@ Thread summary:"""
                 for m in emails:
                     subj = m.get("subject") or ""
                     fr = m.get("from") or ""
-                    snip = (m.get("snippet") or "")[:150]
+                    snip = (m.get("snippet") or "")[:200]
                     lines.append(f"  From: {fr} | Subject: {subj} | {snip}")
                 parts.append("\n".join(lines))
+                logger.debug("_format: item[%d] → Gmail messages", i)
                 continue
-            # Knowledgebase / answer
+
+            # KB structured extraction output (highest-priority for AI Writer).
+            # Shape: {"structured_data": {"items": [...], "categories": {...}}}
+            # Produced by KnowledgebaseSearchTool._extract_structured_data after
+            # retrieval.  Render as a clean named list the LLM can directly enumerate.
+            if "structured_data" in item and isinstance(item.get("structured_data"), dict):
+                sd = item["structured_data"]
+                items = sd.get("items") or []
+                categories = sd.get("categories") or {}
+                if items:
+                    lines = ["Knowledge base — extracted items:"]
+                    if isinstance(categories, dict) and categories:
+                        for cat, cat_items in categories.items():
+                            if isinstance(cat_items, list) and cat_items:
+                                lines.append(f"  {cat}:")
+                                for it in cat_items:
+                                    lines.append(f"    • {it}")
+                    else:
+                        for it in items:
+                            lines.append(f"  • {it}")
+                    parts.append("\n".join(lines))
+                    logger.debug("_format: item[%d] → KB structured_data (%d items)", i, len(items))
+                    continue
+
+            # Knowledgebase wrapper with nested results list (chunk-based KB search response)
+            # Shape: {"success": True, "results": [{"chunk_text": "...", "title": "...", ...}]}
+            if "results" in item and isinstance(item.get("results"), list):
+                chunks = item["results"]
+                if chunks and isinstance(chunks[0], dict) and (
+                    "chunk_text" in chunks[0] or "text" in chunks[0] or "content" in chunks[0]
+                ):
+                    lines = ["Knowledge base (search results):"]
+                    for idx, chunk in enumerate(chunks[:8]):
+                        title = (chunk.get("title") or chunk.get("document_title") or "").strip()
+                        text = (
+                            chunk.get("chunk_text") or chunk.get("text") or
+                            chunk.get("content") or chunk.get("answer") or ""
+                        ).strip()
+                        if text:
+                            header = f"  [{idx + 1}] {title}" if title else f"  [{idx + 1}]"
+                            lines.append(header)
+                            lines.append(f"  {text}")
+                    if len(lines) > 1:
+                        parts.append("\n".join(lines))
+                        logger.debug("_format: item[%d] → KB search results wrapper (%d chunks)", i, len(chunks))
+                    continue
+
+            # KB chunk row (direct chunk dict without wrapper)
+            # Shape: {"chunk_text": "...", "title": "...", "relevance_score": 0.9, ...}
+            if "chunk_text" in item or ("text" in item and "relevance_score" in item):
+                text = (item.get("chunk_text") or item.get("text") or "").strip()
+                title = (item.get("title") or item.get("document_title") or "").strip()
+                if text:
+                    header = f"Knowledge base chunk — {title}:" if title else "Knowledge base chunk:"
+                    parts.append(f"{header}\n{text}")
+                    logger.debug("_format: item[%d] → KB chunk row (title=%s, len=%d)", i, title, len(text))
+                continue
+
+            # Knowledgebase answer/data (flat)
             if "answer" in item or "data" in item:
                 src = "Knowledge base" if "answer" in item else "Data"
                 text = item.get("answer") or item.get("data")
-                if isinstance(text, str):
-                    parts.append(f"{src}: {text[:800]}")
+                if isinstance(text, str) and text.strip():
+                    parts.append(f"{src}: {text}")
+                    logger.debug("_format: item[%d] → KB answer/data", i)
                 elif isinstance(text, list):
-                    parts.append(f"{src}: " + " | ".join(str(x)[:200] for x in text[:5]))
+                    parts.append(f"{src}: " + " | ".join(str(x) for x in text[:10]))
+                    logger.debug("_format: item[%d] → KB answer/data list", i)
                 continue
-            # Generic result/response with messages or content
+
+            # Generic MCP / previous-step response
             if "response" in item and item.get("response"):
-                parts.append(f"Context from previous step: {(item.get('response') or '')[:500]}")
+                parts.append(f"Context from previous step: {item.get('response') or ''}")
+                logger.debug("_format: item[%d] → generic response", i)
                 continue
-            # Unpack nested result
+
+            # Unpack nested result wrapper
             inner = item.get("result") if isinstance(item.get("result"), dict) else None
             if inner and isinstance(inner, dict):
                 if "messages" in inner:
@@ -950,21 +1033,43 @@ Thread summary:"""
                     for m in emails:
                         if isinstance(m, dict):
                             lines.append(
-                                f"  From: {m.get('from','')} | Subject: {m.get('subject','')} | {(m.get('snippet') or '')[:120]}"
+                                f"  From: {m.get('from','')} | Subject: {m.get('subject','')} | {(m.get('snippet') or '')[:200]}"
                             )
                     if len(lines) > 1:
                         parts.append("\n".join(lines))
                 elif inner.get("answer"):
-                    parts.append("Knowledge base: " + str(inner["answer"])[:800])
-            # Fallback: key fields
-            subset = {
-                k: v
-                for k, v in item.items()
-                if k in ("to", "from", "subject", "body", "summary", "content", "response", "answer") and v
+                    parts.append("Knowledge base: " + str(inner["answer"]))
+                elif inner.get("results") and isinstance(inner["results"], list):
+                    # Nested search results
+                    lines = ["Knowledge base (nested results):"]
+                    for idx, chunk in enumerate(inner["results"][:8]):
+                        if isinstance(chunk, dict):
+                            text = (chunk.get("chunk_text") or chunk.get("text") or chunk.get("content") or "").strip()
+                            title = (chunk.get("title") or "").strip()
+                            if text:
+                                lines.append(f"  [{idx + 1}] {title}" if title else f"  [{idx + 1}]")
+                                lines.append(f"  {text}")
+                    if len(lines) > 1:
+                        parts.append("\n".join(lines))
+                logger.debug("_format: item[%d] → nested result wrapper", i)
+                continue
+
+            # Fallback: surface any non-empty text-like values
+            text_vals = {
+                k: v for k, v in item.items()
+                if k in (
+                    "to", "from", "subject", "body", "summary", "content",
+                    "response", "answer", "text", "description", "detail",
+                )
+                and v and isinstance(v, str)
             }
-            if subset:
-                parts.append("Context: " + json.dumps(subset)[:500])
-        return "\n\n".join(parts) if parts else ""
+            if text_vals:
+                parts.append("Context: " + json.dumps(text_vals))
+                logger.debug("_format: item[%d] → fallback text fields %s", i, list(text_vals.keys()))
+
+        result = "\n\n".join(parts) if parts else ""
+        logger.info("_format_provided_data_by_source: %d items → %d sections → %d chars", len(provided_data), len(parts), len(result))
+        return result
 
     def _extract_context_block_from_message(self, user_query: str, max_chars: int = 3500) -> str:
         """
@@ -1009,6 +1114,14 @@ Thread summary:"""
         if not user_query or not isinstance(user_query, str):
             return user_query or ""
         text = user_query.strip()
+
+        # Dynamic context prepend format: "--- Writing task ---\n<task>" (runner prepends
+        # agent identity + step bullets before this marker; extract only what follows).
+        if "--- Writing task ---" in text:
+            idx = text.find("--- Writing task ---")
+            task_text = text[idx + len("--- Writing task ---"):].strip()
+            if task_text:
+                return task_text
 
         # New workflow step format: extract task between header and optional tool note
         if "Do this step" in text:
@@ -1058,10 +1171,14 @@ Thread summary:"""
         pre_formatted_context: Optional[str] = None,
     ) -> str:
         """Build enriched context from provided_data (other apps), tool_args, and any main-agent bullet context in the message."""
-        brief = self._redact_forbidden_phrases(self._get_brief_from_user_message(user_query or ""))
-        parts = [f"User request (task to fulfill): {brief[:600]}"]
+        brief = self._get_brief_from_user_message(user_query or "")
+        # Full brief — no independent truncation here. The overall enriched_context
+        # already gets a single, token-budget-aware cap at the end of this method
+        # (_limit_context_tokens), so an extra fixed char cutoff on just this piece
+        # only risks silently cutting off the brief's own instructions/rules.
+        parts = [f"User request (task to fulfill): {brief}"]
         # Main agent may pass complete context as bullets in the message (workflow step)
-        main_ctx = self._redact_forbidden_phrases((user_query or "").strip())
+        main_ctx = (user_query or "").strip()
         if (
             "Complete context from main agent" in main_ctx
             or "Context from previous steps" in main_ctx
@@ -1090,6 +1207,11 @@ Thread summary:"""
                 if bullet_block:
                     parts.append("--- Complete context from main agent (use these bullets for the draft) ---")
                     parts.append(bullet_block)
+                    logger.info(
+                        "   📋 _enrich_context: context block extracted from user_query → %d chars:\n%s",
+                        len(bullet_block),
+                        bullet_block,
+                    )
         # Pre-flight context answered by main agent (sender identity, company/product facts, etc.)
         if "Context gathered by main agent for AI Writer" in main_ctx:
             g_idx = main_ctx.find("--- Context gathered by main agent for AI Writer ---")
@@ -1113,17 +1235,17 @@ Thread summary:"""
         # Real data from other apps: use pre_formatted (e.g. thread summary) when provided, else format by source
         if pre_formatted_context:
             parts.append("--- Context from other apps (use this to personalize and align the draft) ---")
-            parts.append(self._redact_forbidden_phrases(pre_formatted_context))
+            parts.append(pre_formatted_context)
         else:
-            from_apps = self._redact_forbidden_phrases(self._format_provided_data_by_source(provided_data))
+            from_apps = self._format_provided_data_by_source(provided_data)
             if from_apps:
                 parts.append("--- Context from other apps (use this to personalize and align the draft) ---")
                 parts.append(from_apps)
         if tool_args:
             if tool_args.get("step_action"):
-                parts.append("Step / full request: " + self._redact_forbidden_phrases(str(tool_args["step_action"])[:500]))
+                parts.append("Step / full request: " + str(tool_args["step_action"])[:500])
             if tool_args.get("context"):
-                parts.append("Context (user): " + self._redact_forbidden_phrases(str(tool_args["context"])[:400]))
+                parts.append("Context (user): " + str(tool_args["context"])[:400])
             if tool_args.get("recipient_name") or tool_args.get("recipient_email"):
                 parts.append(
                     "Recipient: "
@@ -1481,7 +1603,7 @@ Rules:
 
 Classification: {json.dumps(classification)}
 Derived request profile: {json.dumps(profile)}
-User request (this is the brief to fulfill; do not paste it into subject or body): {brief[:500]}
+User request (this is the brief to fulfill; do not paste it into subject or body): {brief}
 
 {_ec[:5000]}
 
@@ -1495,7 +1617,7 @@ Output JSON only with keys: subject, body. No markdown."""
             # Retry once with minimal prompt so we don't fail on transient LLM issues
             fallback_prompt = f"""Write a professional email as JSON. Keys: "subject", "body".
 The following is the user's *instruction* (brief) to fulfill. Do NOT use it as the subject or as the body text. Produce a real subject line (e.g. "Services Overview") and a body that fulfills the instruction. Do NOT include any "Complete context" or bullet-point context in the body — normal email only.
-Request (brief to fulfill): {brief[:400]}
+Request (brief to fulfill): {brief}
 Output only valid JSON, no markdown."""
             out = await self._llm_generate(fallback_prompt, max_tokens=800)
         if not out:
@@ -1673,6 +1795,56 @@ Output a single JSON object with keys: subject, body (the final improved draft).
         with provided_data. Then: classify -> enrich context -> plan -> generate -> self-review.
         """
         try:
+            # ── Incoming data diagnostics ─────────────────────────────────────
+            # Logs exactly what the AI Writer receives from the runner so you can
+            # see which keys/shapes come from MCP tools, Gmail, KB, etc.
+            logger.info(
+                "📝 AI Writer run() called | query_len=%d | tool_args_keys=%s | "
+                "provided_data_type=%s | provided_data_len=%s",
+                len(user_query or ""),
+                list((tool_args or {}).keys()),
+                type(provided_data).__name__,
+                len(provided_data) if isinstance(provided_data, (list, dict)) else "n/a",
+            )
+            if isinstance(provided_data, list):
+                for _i, _item in enumerate(provided_data):
+                    if isinstance(_item, dict):
+                        _top_keys = list(_item.keys())
+                        logger.info("   📦 provided_data[%d]: keys=%s", _i, _top_keys)
+                        # Log every non-empty value in full (no truncation)
+                        for _k, _v in _item.items():
+                            if _v is not None and _v != "" and _v != [] and _v != {}:
+                                logger.info("      [%s] = %s", _k, _v)
+                    else:
+                        logger.info("   📦 provided_data[%d]: type=%s val=%s", _i, type(_item).__name__, _item)
+            if tool_args:
+                for _k, _v in (tool_args or {}).items():
+                    logger.info("   🔧 tool_arg[%s] = %s", _k, _v)
+            # Context markers present in the message
+            _ctx_markers = [
+                m for m in (
+                    "Complete context from main agent",
+                    "Context From Previous Steps",
+                    "Context from previous steps",
+                    "Do this step",
+                    "Current step:",
+                )
+                if m in (user_query or "")
+            ]
+            if _ctx_markers:
+                logger.info("   📋 Context markers in user_query: %s", _ctx_markers)
+            # ─────────────────────────────────────────────────────────────────
+
+            # Promote behavioral rules from user_query into system prompt for all downstream LLM calls.
+            # This ensures constraints like "never mention X" are enforced at the instruction level,
+            # not buried as soft context in the user message.
+            self._behavioral_rules_str = self._extract_behavioral_rules(user_query or "")
+            if self._behavioral_rules_str:
+                logger.info(
+                    "   🔒 Behavioral rules extracted → %d chars (will be injected into every LLM system prompt)",
+                    len(self._behavioral_rules_str),
+                )
+
             # Main agent may have given context as bullets; we may still need more detail for the email
             # Check all casing variants: workflow uses "Context From Previous Steps" (capitals) or
             # "Context from previous steps" (lower) or "Complete context from main agent"
@@ -1681,7 +1853,6 @@ Output a single JSON object with keys: subject, body (the final improved draft).
                 "Complete context from main agent" in _uq
                 or "Context from previous steps" in _uq
                 or "Context From Previous Steps" in _uq
-                or "AGENT IDENTITY" in _uq  # outer brain injected identity/services block
             )
             has_prior_data = bool(provided_data and isinstance(provided_data, list) and len(provided_data) > 0)
             # If we were re-invoked after context steps and got empty list, generate from available info only (don't ask again)
@@ -1784,17 +1955,48 @@ Output a single JSON object with keys: subject, body (the final improved draft).
                     if not (profile.get(k) or "").strip() and (ctx_profile.get(k) or "").strip():
                         profile[k] = ctx_profile[k]
 
-            # Optional context summarization to save tokens (thread summary instead of raw Gmail dump)
+            # Optional context summarization to save tokens (thread summary instead of raw Gmail dump).
+            # Skip summarization when data contains knowledge base chunks or search results —
+            # summarization collapses specific service/product lists into vague prose, losing the
+            # exact items the LLM needs to enumerate in the draft. Detection is structural: any item
+            # with chunk_text / relevance_score / chunk_id keys, or a results list containing those
+            # keys, signals reference/factual content that must reach the LLM verbatim.
+            _kb_content_keys = {"chunk_text", "relevance_score", "chunk_id", "chunk_index"}
+            def _has_kb_content(items: list) -> bool:
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    if _kb_content_keys & set(item.keys()):
+                        return True
+                    nested = item.get("results")
+                    if isinstance(nested, list) and nested and isinstance(nested[0], dict):
+                        if _kb_content_keys & set(nested[0].keys()):
+                            return True
+                return False
+
             pre_formatted = None
             if provided_data and isinstance(provided_data, list) and len(provided_data) > 0:
                 from_apps = self._format_provided_data_by_source(provided_data)
                 if from_apps and len(from_apps.strip()) > 600:
-                    pre_formatted = await self._summarize_context(from_apps)
+                    if _has_kb_content(provided_data):
+                        # KB / search content: pass directly so all service names survive intact.
+                        # _limit_context_tokens inside _enrich_context handles the final size cap.
+                        pre_formatted = from_apps
+                        logger.info("   🔍 KB content detected — skipping summarization, using raw %d chars", len(from_apps))
+                    else:
+                        pre_formatted = await self._summarize_context(from_apps)
                 elif from_apps:
                     pre_formatted = from_apps
+                logger.info(
+                    "   🔍 _format_provided_data_by_source → %d chars | pre_formatted → %d chars",
+                    len(from_apps or ""),
+                    len(pre_formatted or ""),
+                )
             enriched_context = self._enrich_context(
                 user_query, provided_data, tool_args, pre_formatted_context=pre_formatted
             )
+            logger.info("   📄 enriched_context built → %d chars", len(enriched_context))
+            logger.info("   📄 enriched_context FULL CONTENT:\n%s", enriched_context)
 
             yield event(
                 AgentEvent.THOUGHT,

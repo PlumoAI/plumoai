@@ -1,0 +1,8 @@
+{
+  "plugin_id": "google_drive",
+  "app_codes": ["googledrive"],
+  "type": "functions_wrapper",
+  "display_name": "Google Drive Agent",
+  "description": "Manages Google Drive files, folders, permissions, comments, replies, revisions, properties, shared drives, and account info.",
+  "entrypoint": "entrypoint.py"
+}

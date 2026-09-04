@@ -1,0 +1,54 @@
+{
+  "plugin_id": "whatsapp_business",
+  "app_codes": ["whatsapp_business"],
+  "type": "functions_wrapper",
+  "display_name": "WhatsApp Business Agent",
+  "description": "WhatsApp Business AI Agent allows this AI Digital Employee to securely connect with the WhatsApp Business Cloud API (Meta Graph API) and manage business messaging using natural language.\r\nThe agent can send text, media, template, interactive, location, and contact messages, manage message templates, media, phone numbers, the business profile, QR code message links, and analytics, strictly based on the permissions granted to the connected WhatsApp Business credentials while maintaining privacy, security, and reliable messaging operations.",
+  "required_fields": [],
+  "service_provider_code": "meta",
+  "entrypoint": "entrypoint.py",
+  "triggers": [
+    {
+      "trigger_id": "whatsapp_message_received",
+      "display_name": "On Message Received",
+      "description": "Fires when an inbound WhatsApp message arrives via the Cloud API webhook (Meta Graph API 'messages' field). Requires this platform's webhook URL to be verified in the Meta App Dashboard and the connected WABA subscribed to it (done automatically by this trigger's subscribe step).",
+      "entrypoint": "trigger_entrypoint.py",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "phone_number_id": {
+            "type": "string",
+            "description": "WhatsApp phone number ID to scope this trigger to. Required -- used to identify which subscription an inbound webhook belongs to. Defaults to this connection's configured phone_number_id if omitted."
+          }
+        },
+        "required": []
+      },
+      "config": {
+        "verification_token": "Google@7861"
+      }
+    }
+  ],
+  "param_options": {
+    "send_template_message": {
+      "template_name": { "depends_on": [], "description": "Approved message templates on this WABA" },
+      "language_code": { "depends_on": ["template_name"], "description": "Approved language variants for the selected template" }
+    },
+    "get_message_template": {
+      "template_id": { "depends_on": [], "description": "Message templates on this WABA" }
+    },
+    "update_message_template": {
+      "template_id": { "depends_on": [], "description": "Message templates on this WABA" }
+    },
+    "delete_message_template": {
+      "name": { "depends_on": [], "description": "Message templates on this WABA (deletes all language variants)" },
+      "template_id": { "depends_on": [], "description": "A specific template language-variant to delete" }
+    },
+    "list_message_templates": {
+      "name": { "depends_on": [], "description": "Message templates on this WABA" }
+    },
+    "action_by_query": {
+      "template_name": { "depends_on": [], "description": "Approved message templates on this WABA" },
+      "language_code": { "depends_on": ["template_name"], "description": "Approved language variants for the selected template" }
+    }
+  }
+}

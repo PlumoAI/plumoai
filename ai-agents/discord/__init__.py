@@ -1,0 +1,3 @@
+"""
+Discord tool plugin package.
+"""

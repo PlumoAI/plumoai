@@ -1,0 +1,8 @@
+{
+  "plugin_id": "google_meet",
+  "app_codes": ["googlemeet"],
+  "type": "functions_wrapper",
+  "display_name": "Google Meet Agent",
+  "description": "Manages Google Meet spaces, conference records, participants, recordings, transcripts, and smart notes.",
+  "entrypoint": "entrypoint.py"
+}

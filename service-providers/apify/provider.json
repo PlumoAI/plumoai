@@ -1,19 +1,10 @@
 {
   "name": "Apify",
-  "code": "Apify",
-  "auth_type": "oauth2",
+  "code": "apify",
+  "auth_type": "custom",
   "required_fields": [
-   
+    { "key": "api_key", "type": "password", "label": "Personal API Token" }
   ],
-  "config": {
-    "scope": "full_api_access",
-    "authorization_endpoint":"https://console.apify.com/authorize/oauth",
-    "token_endpoint":"https://console-backend.apify.com/oauth/apps/token",
-    "register_endpoint":"https://console-backend.apify.com/oauth/apps",
-    "access_type": "offline",
-    "grant_types": ["authorization_code"],
-    "registration_url":"https://console-backend.apify.com/oauth/apps",
-    "is_client_registration_required": true
-  },
-  "icon": "./apify.svg"
+  "config": {},
+  "is_active": true
 }

@@ -1,0 +1,13 @@
+{
+  "name": "WhatsApp Business",
+  "code": "whatsapp_business",
+  "auth_type": "custom",
+  "required_fields": [
+    { "key": "access_token", "type": "password", "label": "Access Token" },
+    { "key": "waba_id", "type": "text", "label": "WhatsApp Business Account ID" },
+    { "key": "business_id", "type": "text", "label": "Business ID" },
+    { "key": "phone_number_id", "type": "text", "label": "Phone Number ID" }
+  ],
+  "config": {},
+  "is_active": true
+}

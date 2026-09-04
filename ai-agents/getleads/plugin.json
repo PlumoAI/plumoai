@@ -1,0 +1,11 @@
+{
+  "plugin_id": "getleads",
+  "app_codes": ["getleads"],
+  "type": "functions_wrapper",
+  "display_name": "GetLeads.io",
+  "description": "GetLeads.io Agent allows this AI Digital Employee to securely connect with the GetLeads.io B2B contact database (402M+ contacts) and find/enrich people using natural language.\r\nThe agent can enrich a person by work email, LinkedIn profile URL, or name + company/domain; search, count, and export contacts from the database with rich firmographic/role/location filters; and look up filter enum values, strictly based on the permissions granted to the connected GetLeads.io API key.",
+  "required_fields": [],
+  "service_provider_code": "getleads",
+  "icon": "getleads.svg",
+  "entrypoint": "entrypoint.py"
+}

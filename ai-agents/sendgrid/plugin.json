@@ -1,0 +1,88 @@
+{
+  "plugin_id": "sendgrid",
+  "app_codes": ["sendgrid"],
+  "type": "functions_wrapper",
+  "display_name": "SendGrid Agent",
+  "description": "SendGrid AI Agent allows this AI Digital Employee to securely connect with the SendGrid Web API v3 and manage transactional and marketing email using natural language.\r\nThe agent can send plain-text/HTML and dynamic-template emails, validate email addresses, manage verified senders, templates and template versions, marketing contact lists and contacts, suppression lists (bounces, blocks, invalid emails, spam reports, global unsubscribes), view email activity stats, and receive inbound email via SendGrid's Inbound Parse webhook, strictly based on the permissions granted to the connected SendGrid API key while maintaining privacy, security, and reliable email delivery.",
+  "required_fields": [],
+  "service_provider_code": "sendgrid",
+  "entrypoint": "entrypoint.py",
+  "triggers": [
+    {
+      "trigger_id": "sendgrid_email_event",
+      "display_name": "Email Tracking Event",
+      "description": "Fires on the selected SendGrid Event Webhook activity type(s) for emails sent through this connection. Pick one or more event types below; all of them are subscribed in a single call to this SendGrid account's (account-wide) signed Event Webhook, merging with any event types already enabled by another subscription on the same connection.",
+      "entrypoint": "trigger_entrypoint.py",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "event_types": {
+            "type": "array",
+            "description": "Which SendGrid event type(s) should fire this trigger. Select one or more.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "processed", "dropped", "delivered", "deferred", "bounce",
+                "open", "click", "spam_report", "unsubscribe",
+                "group_unsubscribe", "group_resubscribe"
+              ]
+            },
+            "minItems": 1
+          }
+        },
+        "required": ["event_types"]
+      },
+      "config": {
+        "subscriber_url": "https://api.plumoai.com/company/aiagentchat/workflow/trigger-callback/sendgrid"
+      }
+    },
+    {
+      "trigger_id": "sendgrid_inbound_email",
+      "display_name": "On Inbound Email Received",
+      "description": "Fires when an email arrives at the SendGrid Inbound Parse hostname configured below. The hostname's MX record must already point to mx.sendgrid.net in your own DNS (done outside this platform) -- this trigger only registers/updates the SendGrid-side Inbound Parse setting via the SendGrid API, pointed at this platform's shared SendGrid callback endpoint (the same URL the Email Tracking Event trigger uses).",
+      "entrypoint": "trigger_entrypoint.py",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "hostname": {
+            "type": "string",
+            "description": "Subdomain to receive inbound mail on, e.g. 'parse.yourdomain.com'. Its MX record must already point to mx.sendgrid.net."
+          },
+          "spam_check": {
+            "type": "boolean",
+            "description": "Whether SendGrid should spam-filter inbound mail before delivering it here. Default false."
+          },
+          "send_raw": {
+            "type": "boolean",
+            "description": "Receive the full raw MIME message instead of pre-parsed to/from/subject/text/html fields. Default false."
+          }
+        },
+        "required": ["hostname"]
+      },
+      "config": {
+        "subscriber_url": "https://api.plumoai.com/company/aiagentchat/workflow/trigger-callback/sendgrid"
+      }
+    }
+  ],
+  "param_options": {
+    "get_template": { "template_id": { "depends_on": [], "description": "Templates on this account" } },
+    "delete_template": { "template_id": { "depends_on": [], "description": "Templates on this account" } },
+    "create_template_version": { "template_id": { "depends_on": [], "description": "Templates on this account" } },
+    "list_templates": { "generation": { "depends_on": [], "description": "Static list of template generations" } },
+    "create_template": { "generation": { "depends_on": [], "description": "Static list of template generations" } },
+    "send_email": { "from_email": { "depends_on": [], "description": "Verified sender addresses on this account" } },
+    "send_template_email": {
+      "template_id": { "depends_on": [], "description": "Dynamic templates on this account" },
+      "from_email": { "depends_on": [], "description": "Verified sender addresses on this account" }
+    },
+    "delete_verified_sender": { "sender_id": { "depends_on": [], "description": "Verified sender identities on this account" } },
+    "delete_contact_list": { "list_id": { "depends_on": [], "description": "Marketing contact lists on this account" } },
+    "upsert_contacts": { "list_ids": { "depends_on": [], "description": "Marketing contact lists on this account" } },
+    "list_suppressions": { "suppression_type": { "depends_on": [], "description": "Static list of suppression types" } },
+    "delete_suppression": {
+      "suppression_type": { "depends_on": [], "description": "Static list of suppression types" },
+      "email": { "depends_on": ["suppression_type"], "description": "Currently-suppressed emails of the selected type" }
+    },
+    "get_email_stats": { "aggregated_by": { "depends_on": [], "description": "Static list of stats aggregation granularities" } }
+  }
+}

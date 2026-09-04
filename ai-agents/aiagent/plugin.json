@@ -1,0 +1,9 @@
+{
+  "plugin_id": "aiagent",
+  "app_codes": ["aiagent"],
+  "type": "python_tool_agent",
+  "display_name": "AI Agent",
+  "description": "Makes a single plain LLM call with a given prompt and returns the model's raw text output. No credentials required.",
+  "entrypoint": "entrypoint.py",
+  "auto_attach_to_all_agents": false
+}

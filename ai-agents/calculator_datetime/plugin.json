@@ -3,7 +3,7 @@
   "app_codes": ["calculator_datetime"],
   "type": "python_tool_agent",
   "display_name": "Calculator & DateTime",
-  "description": "Basic arithmetic and date/time operations.",
+  "description": "ALWAYS call this tool FIRST — before any other tool — whenever the user's message contains any reference to a date or time, whether explicit or relative. This includes words like today, tomorrow, yesterday, tonight, this evening, this morning, next week, next Monday, in 2 hours, after 1 hour, 3 days from now, end of day, end of month, or any specific date like June 12 or 5 PM. The tool resolves these natural language references into exact, concrete date and time values (e.g. '2026-06-12T17:00:00') that other tools can use directly. Without calling this tool first, downstream tools receive vague or incorrect times and will fail. Example: if the user says 'schedule a meeting tomorrow evening for 2 hours', call this tool first to get the exact start datetime for tomorrow evening and the exact end datetime 2 hours later — then pass those resolved values to the calendar or scheduling tool. Also handles arithmetic, unit conversions, and general numeric calculations.",
   "entrypoint": "entrypoint.py",
   "auto_attach_to_all_agents": true
 }

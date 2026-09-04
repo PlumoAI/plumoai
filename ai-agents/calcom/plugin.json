@@ -1,0 +1,194 @@
+{
+  "plugin_id": "calcom",
+  "app_codes": ["calcom"],
+  "type": "functions_wrapper",
+  "display_name": "Cal.com Agent",
+  "description": "Cal.com AI Agent allows this AI Digital Employee to securely connect with Cal.com and manage scheduling using natural language.\r\nThe agent can list/create/cancel/reschedule/confirm/decline bookings, add guests, check available time slots, manage event types and schedules, view connected calendars and busy times, manage out-of-office entries and webhooks, read/update the profile, and view team bookings/event types/memberships, strictly based on the permissions granted to the connected Cal.com credentials while maintaining privacy, security, and reliable scheduling operations.",
+  "required_fields": [],
+  "service_provider_code": "calcom",
+  "icon": "calcom.svg",
+  "entrypoint": "entrypoint.py",
+  "triggers": [
+    {
+      "trigger_id": "calcom_booking_created",
+      "display_name": "On Booking Created",
+      "description": "Fires on Cal.com's BOOKING_CREATED webhook event. Requires a webhook already configured on the Cal.com account (nested-format payload) pointed at this trigger's callback endpoint -- this trigger does not call Cal.com's webhooks API itself.",
+      "entrypoint": "trigger_entrypoint.py",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "event_type_id": {
+            "type": "integer",
+            "description": "Cal.com event type id to scope this trigger to a single event type. Required -- used to identify which subscription an inbound webhook belongs to."
+          }
+        },
+        "required": ["event_type_id"]
+      },
+      "config": {
+        "cal_event_trigger": "BOOKING_CREATED",
+        "subscriber_url": "https://api.plumoai.com/company/aiagentchat/workflow/trigger-callback/calcom",
+        "webhook_secret": "4265ff742c12459ab2a7eacbe68b02a9"
+      }
+    },
+    {
+      "trigger_id": "calcom_booking_cancelled",
+      "display_name": "On Booking Cancelled",
+      "description": "Fires on Cal.com's BOOKING_CANCELLED webhook event. Requires a webhook already configured on the Cal.com account (nested-format payload) pointed at this trigger's callback endpoint -- this trigger does not call Cal.com's webhooks API itself.",
+      "entrypoint": "trigger_entrypoint.py",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "event_type_id": {
+            "type": "integer",
+            "description": "Cal.com event type id to scope this trigger to a single event type. Required -- used to identify which subscription an inbound webhook belongs to."
+          }
+        },
+        "required": ["event_type_id"]
+      },
+      "config": {
+        "cal_event_trigger": "BOOKING_CANCELLED",
+        "subscriber_url": "https://api.plumoai.com/company/aiagentchat/workflow/trigger-callback/calcom",
+        "webhook_secret": "4265ff742c12459ab2a7eacbe68b02a9"
+      }
+    },
+    {
+      "trigger_id": "calcom_booking_rescheduled",
+      "display_name": "On Booking Rescheduled",
+      "description": "Fires on Cal.com's BOOKING_RESCHEDULED webhook event. Requires a webhook already configured on the Cal.com account (nested-format payload) pointed at this trigger's callback endpoint -- this trigger does not call Cal.com's webhooks API itself.",
+      "entrypoint": "trigger_entrypoint.py",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "event_type_id": {
+            "type": "integer",
+            "description": "Cal.com event type id to scope this trigger to a single event type. Required -- used to identify which subscription an inbound webhook belongs to."
+          }
+        },
+        "required": ["event_type_id"]
+      },
+      "config": {
+        "cal_event_trigger": "BOOKING_RESCHEDULED",
+        "subscriber_url": "https://api.plumoai.com/company/aiagentchat/workflow/trigger-callback/calcom",
+        "webhook_secret": "4265ff742c12459ab2a7eacbe68b02a9"
+      }
+    },
+    {
+      "trigger_id": "calcom_meeting_ended",
+      "display_name": "On Meeting Ended",
+      "description": "Fires on Cal.com's MEETING_ENDED webhook event. Requires a webhook already configured on the Cal.com account (flat-format payload) pointed at this trigger's callback endpoint -- this trigger does not call Cal.com's webhooks API itself.",
+      "entrypoint": "trigger_entrypoint.py",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "event_type_id": {
+            "type": "integer",
+            "description": "Cal.com event type id to scope this trigger to a single event type. Required -- used to identify which subscription an inbound webhook belongs to."
+          }
+        },
+        "required": ["event_type_id"]
+      },
+      "config": {
+        "cal_event_trigger": "MEETING_ENDED",
+        "subscriber_url": "https://api.plumoai.com/company/aiagentchat/workflow/trigger-callback/calcom",
+        "webhook_secret": "4265ff742c12459ab2a7eacbe68b02a9"
+      }
+    }
+  ],
+  "param_options": {
+    "get_event_type": {
+      "event_type_id": { "depends_on": [], "description": "The user's own event types" }
+    },
+    "update_event_type": {
+      "event_type_id": { "depends_on": [], "description": "The user's own event types" },
+      "schedule_id": { "depends_on": [], "description": "Schedules to point this event type's availability at" }
+    },
+    "delete_event_type": {
+      "event_type_id": { "depends_on": [], "description": "The user's own event types" }
+    },
+    "create_event_type": {
+      "schedule_id": { "depends_on": [], "description": "Schedules to point this event type's availability at" }
+    },
+    "create_booking": {
+      "event_type_id": { "depends_on": [], "description": "Event type to book" }
+    },
+    "get_available_slots": {
+      "event_type_id": { "depends_on": [], "description": "Event type to check availability for" }
+    },
+    "list_bookings": {
+      "event_type_id": { "depends_on": [], "description": "Filter to one event type" },
+      "team_id": { "depends_on": [], "description": "Filter to one team" }
+    },
+    "get_booking": {
+      "booking_uid": { "depends_on": [], "description": "The user's bookings" }
+    },
+    "cancel_booking": {
+      "booking_uid": { "depends_on": [], "description": "The user's bookings" }
+    },
+    "reschedule_booking": {
+      "booking_uid": { "depends_on": [], "description": "The user's bookings" }
+    },
+    "confirm_booking": {
+      "booking_uid": { "depends_on": [], "description": "The user's bookings" }
+    },
+    "decline_booking": {
+      "booking_uid": { "depends_on": [], "description": "The user's bookings" }
+    },
+    "mark_booking_absence": {
+      "booking_uid": { "depends_on": [], "description": "The user's bookings" },
+      "attendee_email": { "depends_on": ["booking_uid"], "description": "Attendees on the selected booking" }
+    },
+    "add_booking_guests": {
+      "booking_uid": { "depends_on": [], "description": "The user's bookings" }
+    },
+    "update_my_profile": {
+      "default_schedule_id": { "depends_on": [], "description": "Schedules to set as default" },
+      "week_start": { "depends_on": [], "description": "Static list of weekday names" }
+    },
+    "get_schedule": {
+      "schedule_id": { "depends_on": [], "description": "The user's schedules" }
+    },
+    "update_schedule": {
+      "schedule_id": { "depends_on": [], "description": "The user's schedules" }
+    },
+    "delete_schedule": {
+      "schedule_id": { "depends_on": [], "description": "The user's schedules" }
+    },
+    "create_out_of_office": {
+      "reason": { "depends_on": [], "description": "Static list of out-of-office reasons" }
+    },
+    "delete_out_of_office": {
+      "ooo_id": { "depends_on": [], "description": "The user's out-of-office entries" }
+    },
+    "create_webhook": {
+      "triggers": { "depends_on": [], "description": "Static list of Cal.com webhook event names" }
+    },
+    "update_webhook": {
+      "webhook_id": { "depends_on": [], "description": "The user's webhooks" },
+      "triggers": { "depends_on": [], "description": "Static list of Cal.com webhook event names" }
+    },
+    "delete_webhook": {
+      "webhook_id": { "depends_on": [], "description": "The user's webhooks" }
+    },
+    "get_team_bookings": {
+      "team_id": { "depends_on": [], "description": "Teams the user belongs to" }
+    },
+    "get_team_event_types": {
+      "team_id": { "depends_on": [], "description": "Teams the user belongs to" }
+    },
+    "list_team_memberships": {
+      "team_id": { "depends_on": [], "description": "Teams the user belongs to" }
+    },
+    "calcom_booking_created": {
+      "event_type_id": { "depends_on": [], "description": "Scope the trigger to one event type" }
+    },
+    "calcom_booking_cancelled": {
+      "event_type_id": { "depends_on": [], "description": "Scope the trigger to one event type" }
+    },
+    "calcom_booking_rescheduled": {
+      "event_type_id": { "depends_on": [], "description": "Scope the trigger to one event type" }
+    },
+    "calcom_meeting_ended": {
+      "event_type_id": { "depends_on": [], "description": "Scope the trigger to one event type" }
+    }
+  }
+}
