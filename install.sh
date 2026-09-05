@@ -188,6 +188,14 @@ if [ "$RUN_MODE" != "localhost" ]; then
   fi
 fi
 
+# Public base URL of the app (e.g. auth uses this to build email verification/reset links).
+if [ "$RUN_MODE" = "localhost" ]; then
+  APP_HOST="http://localhost:${LOCALHOST_PORT}"
+else
+  APP_HOST="https://${DOMAIN_NAME}"
+fi
+set_env_key APP_HOST "$APP_HOST"
+
 email_provider_needs_prompt() {
   local p="$1"
   [[ -z "$p" || "$p" == *"<"* ]]

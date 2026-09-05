@@ -161,6 +161,10 @@ if ($RUN_MODE -ne "localhost") {
     }
 }
 
+# Public base URL of the app (e.g. auth uses this to build email verification/reset links).
+$APP_HOST = if ($RUN_MODE -eq "localhost") { "http://localhost:$LOCALHOST_PORT" } else { "https://$DOMAIN_NAME" }
+Set-EnvValue $ENV_FILE "APP_HOST" $APP_HOST
+
 function Test-EmailProviderNeedsPrompt {
     param([string]$Val)
     return [string]::IsNullOrWhiteSpace($Val) -or ($Val -like "*<*" )

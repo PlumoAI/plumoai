@@ -170,6 +170,9 @@ services:
       - ./service-providers:/opt/plumoai/service-providers:ro
     environment:
       SERVICE_PROVIDERS_LOCAL_PATH: /opt/plumoai/service-providers
+      # Public base URL of this app (e.g. http://localhost:7861 or https://your-domain.com),
+      # used to build absolute links back to the app (e.g. email verification/reset links).
+      APP_HOST: ${APP_HOST}
       NODE_ENV: production   # enables V8 opts, disables dev middleware, reduces CPU/RAM
       # One reverse proxy (Traefik) in front → Express/Nest req.ip / forwarded headers
       TRUST_PROXY: ${TRUST_PROXY:-1}
