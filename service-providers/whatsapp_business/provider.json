@@ -1,13 +1,18 @@
 {
   "name": "WhatsApp Business",
   "code": "whatsapp_business",
-  "auth_type": "custom",
+  "auth_type": "oauth2",
   "required_fields": [
-    { "key": "access_token", "type": "password", "label": "Access Token" },
-    { "key": "waba_id", "type": "text", "label": "WhatsApp Business Account ID" },
-    { "key": "business_id", "type": "text", "label": "Business ID" },
-    { "key": "phone_number_id", "type": "text", "label": "Phone Number ID" }
+    { "key": "client_id", "type": "text", "label": "Client ID" },
+    { "key": "client_secret", "type": "password", "label": "Client Secret" },
+    { "key": "config_id", "type": "text", "label": "Config ID" }
   ],
-  "config": {},
+  "config": {
+    "scope": "whatsapp_business_messaging whatsapp_business_management",
+    "authorization_endpoint": "https://graph.facebook.com/oauth/authorize",
+    "token_endpoint": "https://graph.facebook.com/oauth/access_token",
+    "access_type": "offline",
+    "grant_types": ["authorization_code", "refresh_token"]
+  },
   "is_active": true
 }

@@ -1,0 +1,19 @@
+{
+  "name": "Cal.com",
+  "code": "calcom",
+  "auth_type": "oauth2",
+  "required_fields": [
+    { "key": "client_id", "type": "text", "label": "Client ID" }
+  ],
+  "config": {
+    "scope": "BOOKING_READ BOOKING_WRITE EVENT_TYPE_READ EVENT_TYPE_WRITE SCHEDULE_READ SCHEDULE_WRITE APPS_READ PROFILE_READ PROFILE_WRITE WEBHOOK_READ WEBHOOK_WRITE TEAM_BOOKING_READ TEAM_EVENT_TYPE_READ TEAM_MEMBERSHIP_READ",
+    "authorization_endpoint": "https://app.cal.com/auth/oauth2/authorize",
+    "token_endpoint": "https://api.cal.com/v2/auth/oauth2/token",
+    "access_type": "offline",
+    "grant_types": ["authorization_code", "refresh_token"],
+    "registration_endpoint": "https://mcp.cal.com/oauth/register",
+    "is_client_registration_required": false,
+    "is_revoke_api_json_based": true
+  },
+  "is_active": true
+}

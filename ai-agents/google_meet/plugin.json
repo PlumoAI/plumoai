@@ -4,5 +4,6 @@
   "type": "functions_wrapper",
   "display_name": "Google Meet Agent",
   "description": "Manages Google Meet spaces, conference records, participants, recordings, transcripts, and smart notes.",
+  "icon": "googlemeet.svg",
   "entrypoint": "entrypoint.py"
 }

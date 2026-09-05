@@ -4,6 +4,7 @@
   "type": "functions_wrapper",
   "display_name": "Google Calendar Agent",
   "description": "Manages Google Calendar events, availability, and scheduling.",
+  "icon": "googlecalendar.svg",
   "entrypoint": "entrypoint.py"
 }
 

@@ -4,5 +4,6 @@
   "type": "functions_wrapper",
   "display_name": "Google Sheets Agent",
   "description": "Manages Google Sheets spreadsheets, sheets/tabs, cell values, formatting, dimensions, filters, conditional formatting, protected ranges, named ranges, and developer metadata.",
+  "icon": "googlesheets.svg",
   "entrypoint": "entrypoint.py"
 }

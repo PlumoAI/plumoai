@@ -6,6 +6,7 @@
   "description": "WhatsApp Business AI Agent allows this AI Digital Employee to securely connect with the WhatsApp Business Cloud API (Meta Graph API) and manage business messaging using natural language.\r\nThe agent can send text, media, template, interactive, location, and contact messages, manage message templates, media, phone numbers, the business profile, QR code message links, and analytics, strictly based on the permissions granted to the connected WhatsApp Business credentials while maintaining privacy, security, and reliable messaging operations.",
   "required_fields": [],
   "service_provider_code": "meta",
+  "icon": "whatsapp_business.svg",
   "entrypoint": "entrypoint.py",
   "triggers": [
     {

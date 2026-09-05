@@ -4,5 +4,6 @@
   "type": "functions_wrapper",
   "display_name": "YouTube Agent",
   "description": "Searches YouTube and manages videos, channels, playlists, playlist items, comments, subscriptions, and captions via the YouTube Data API v3.",
+  "icon": "youtube.svg",
   "entrypoint": "entrypoint.py"
 }

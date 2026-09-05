@@ -4,5 +4,6 @@
   "type": "functions_wrapper",
   "display_name": "Google Chat Agent",
   "description": "Manages Google Chat spaces, memberships, messages, reactions, pins, space events, and custom emojis via the Google Chat API.",
+  "icon": "googlechat.svg",
   "entrypoint": "entrypoint.py"
 }

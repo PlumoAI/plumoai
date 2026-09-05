@@ -6,6 +6,7 @@
   "description": "PlumoAI's own AI Employees/CRM product exposed as an MCP server: workspaces, AI Employees, tables (work item types), pipelines, workflow statuses, and records. Lets this AI Digital Employee list AI Employees, inspect table/pipeline/status structure, and list/create/update/comment on records, strictly based on the permissions of the connected plumoai credentials.",
   "required_fields": [],
   "service_provider_code": "plumoai",
+  "icon": "plumoai.svg",
   "config": {
     "server_type": "http",
     "url": "https://mcp.plumoai.com/mcp"

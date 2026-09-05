@@ -6,6 +6,7 @@
   "description": "SendGrid AI Agent allows this AI Digital Employee to securely connect with the SendGrid Web API v3 and manage transactional and marketing email using natural language.\r\nThe agent can send plain-text/HTML and dynamic-template emails, validate email addresses, manage verified senders, templates and template versions, marketing contact lists and contacts, suppression lists (bounces, blocks, invalid emails, spam reports, global unsubscribes), view email activity stats, and receive inbound email via SendGrid's Inbound Parse webhook, strictly based on the permissions granted to the connected SendGrid API key while maintaining privacy, security, and reliable email delivery.",
   "required_fields": [],
   "service_provider_code": "sendgrid",
+  "icon": "sendgrid.svg",
   "entrypoint": "entrypoint.py",
   "triggers": [
     {

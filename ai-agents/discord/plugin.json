@@ -4,5 +4,6 @@
   "type": "functions_wrapper",
   "display_name": "Discord Agent",
   "description": "Manages Discord guilds, channels, messages, reactions, threads, members, roles, webhooks, emojis, invites, and scheduled events via the Discord REST API v10.",
+  "icon": "discord.svg",
   "entrypoint": "entrypoint.py"
 }
