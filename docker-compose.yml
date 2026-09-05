@@ -330,9 +330,13 @@ services:
         reservations: { memory: 256M }
     volumes:
       # Writable so stdio MCP servers (e.g. plumoai-mcp) can run `npm ci` at runtime when needed.
-      - ./ai-agents:/opt/plumoai/app_agents
+      - ./ai-agents:/opt/plumoai/ai_agents
+      - ./nodes:/opt/plumoai/nodes
+      - ./service-providers:/opt/plumoai/service-providers:ro
     environment:
-      PLUMOAI_APP_AGENTS_EXTERNAL_DIR: /opt/plumoai/app_agents
+      PLUMOAI_AI_AGENTS_EXTERNAL_DIR: /opt/plumoai/ai_agents
+      PLUMOAI_NODES_EXTERNAL_DIR: /opt/plumoai/nodes
+      PLUMOAI_SERVICE_PROVIDERS_EXTERNAL_DIR: /opt/plumoai/service-providers
       AUTH_URL: ${AUTH_URL:-http://auth:3000}
       # company-api now lives in the merged plumoai-api container (was its own "company" host)
       COMPANY_URL: ${COMPANY_URL:-http://plumoai-api:3001}
