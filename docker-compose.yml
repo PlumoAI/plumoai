@@ -206,14 +206,15 @@ services:
       - "traefik.http.middlewares.auth-strip.stripprefix.prefixes=/api/auth"
       - "traefik.http.routers.auth.middlewares=auth-strip,sec-headers,ratelimit"
 
-  # ------------------- PlumoAI API (company-api + public-api, single container) -------------------
-  # Was two containers (company-api on :3001, public-api on :3010) behind two Traefik
-  # routers. Now one image (plumoai/plumoai-api) runs both apps + an internal nginx on
-  # :8080, routed by path prefix. Traefik's existing routing still works unmodified:
-  #   /api/company/* -> stripped by Traefik  -> nginx "/" catch-all      -> company-api
-  #   /api/v1/*      -> kept by Traefik      -> nginx "/api/" location   -> public-api
+  # ------------------- PlumoAI API (company-api + public-api + websocket-api, single container) -------------------
+  # Was three containers behind separate Traefik routers. Now one image
+  # (plumoai/plumoai-api) runs all three apps + an internal nginx on :8080,
+  # routed by path prefix. Traefik's existing routing still works unmodified:
+  #   /api/company/* -> stripped by Traefik  -> nginx "/" catch-all       -> company-api
+  #   /api/v1/*      -> kept by Traefik      -> nginx "/api/" location    -> public-api
+  #   /ws/*          -> kept by Traefik      -> nginx "/ws/" location     -> websocket-api (WebSocket upgrade)
   plumoai-api:
-    image: plumoai/plumoai-api:${PLUMOAI_API_VERSION:-v1.0.3}
+    image: plumoai/plumoai-api:${PLUMOAI_API_VERSION:-v1.0.1}
     container_name: plumoai-api
     restart: unless-stopped
     depends_on:
@@ -232,7 +233,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G       # now hosts company-api + public-api + nginx in one container
+          memory: 1G       # hosts company-api + public-api + websocket-api + nginx in one container
           cpus: "1.0"
         reservations:
           memory: 256M
@@ -281,6 +282,13 @@ services:
       # here. An unset value is a misconfiguration, not something to paper over with a
       # shared default.
       ENCRYPTION_KEY: ${PLUMOAI_PUBLIC_API_ENCRYPTION_KEY:?PLUMOAI_PUBLIC_API_ENCRYPTION_KEY is not set — run install.sh/install.ps1, or set it in .env}
+      # ---- websocket-api ----
+      # AI employee workflow execution events call the ai service directly (same URL
+      # company-api uses above); Auth_URL is already set for the whole container.
+      PROJECT_AI_ASSISTANT_API_URL: ${PROJECT_AI_ASSISTANT_API_URL:-http://ai:3002}
+      # Stored-procedure calls (project/document saves) go to company-api, now the
+      # SAME container (loopback), not a separate host.
+      PLUMO_API_BASE_URL: ${PLUMO_API_BASE_URL:-http://localhost:3001}
     secrets:
       - mysql_db
       - mysql_user
@@ -309,6 +317,18 @@ services:
       - "traefik.http.routers.plumoai-public-api.service=plumoai-public-api"
       - "traefik.http.services.plumoai-public-api.loadbalancer.server.port=8080"
       - "traefik.http.routers.plumoai-public-api.middlewares=sec-headers,ratelimit"
+
+      # websocket-api routes: /ws/* (prefix kept; WebSocket upgrade — doc/project/
+      # ai_employee workflow execution). Its /internal/* HTTP routes are deliberately
+      # NOT exposed here — they're same-server-only (see websocket-api's
+      # internal-auth.middleware.ts), reachable only from inside the Docker network.
+      - "traefik.http.routers.plumoai-websocket-api.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/ws`)"
+      - "traefik.http.routers.plumoai-websocket-api.entrypoints=websecure"
+      - "traefik.http.routers.plumoai-websocket-api.tls.certresolver=mytlschallenge"
+      - "traefik.http.routers.plumoai-websocket-api.priority=175"
+      - "traefik.http.routers.plumoai-websocket-api.service=plumoai-websocket-api"
+      - "traefik.http.services.plumoai-websocket-api.loadbalancer.server.port=8080"
+      - "traefik.http.routers.plumoai-websocket-api.middlewares=sec-headers,ratelimit"
 
   # ------------------- AI Service (internal only — no exposed URL) -------------------
   # Other services call it by hostname: http://ai:<port> (e.g. http://ai:3000)
