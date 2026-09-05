@@ -15,5 +15,6 @@
     "is_client_registration_required": false,
     "is_revoke_api_json_based": true
   },
+  "icon": "calcom.svg",
   "is_active": true
 }

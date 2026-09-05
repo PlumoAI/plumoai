@@ -15,5 +15,6 @@
     "is_client_registration_required": false,
     "use_pkce": false
   },
+  "icon": "linkedin.svg",
   "is_active": true
 }

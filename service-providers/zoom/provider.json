@@ -7,6 +7,7 @@
     { "key": "ZOOM_CLIENT_ID", "type": "text", "label": "ZOOM CLIENT ID" },
     { "key": "ZOOM_CLIENT_SECRET", "type": "text", "label": "ZOOM CLIENT SECRET" }
   ],
+  "icon": "zoom.svg",
   "config": null,
   "is_active": true
 }

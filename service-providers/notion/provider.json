@@ -11,6 +11,7 @@
     "registration_endpoint": "https://mcp.notion.com/register",
     "isClientRegistrationRequired": true
   },
+  "icon": "notion.svg",
   "is_active": true
 }
 

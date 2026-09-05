@@ -14,6 +14,7 @@
     "grant_types": ["authorization_code", "refresh_token"],
     "is_client_registration_required": false
   },
+  "icon": "google.svg",
   "is_active": true
 }
 

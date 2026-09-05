@@ -14,5 +14,6 @@
     "access_type": "offline",
     "grant_types": ["authorization_code", "refresh_token"]
   },
+  "icon": "whatsapp_business.svg",
   "is_active": true
 }

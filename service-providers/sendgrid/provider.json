@@ -7,6 +7,7 @@
     { "key": "default_from_email", "type": "text", "label": "Default From Email (optional)" },
     { "key": "default_from_name", "type": "text", "label": "Default From Name (optional)" }
   ],
+  "icon": "sendgrid.svg",
   "config": {},
   "is_active": true
 }

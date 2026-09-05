@@ -5,6 +5,7 @@
   "required_fields": [
     { "key": "api_key", "type": "password", "label": "Personal API Token" }
   ],
+  "icon": "apify.svg",
   "config": {},
   "is_active": true
 }

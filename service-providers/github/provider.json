@@ -5,6 +5,7 @@
   "required_fields": [
     { "key": "access_token", "type": "text", "label": "Access Token" }
   ],
+  "icon": "github.svg",
   "config": {},
   "is_active": true
 }

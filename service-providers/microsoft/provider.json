@@ -14,6 +14,7 @@
     "access_type": "offline",
     "is_client_registration_required": false
   },
+  "icon": "icons8-microsoft.svg",
   "is_active": true
 }
 

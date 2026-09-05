@@ -5,6 +5,7 @@
   "required_fields": [
     { "key": "bot_token", "type": "password", "label": "Bot Token" }
   ],
+  "icon": "discord.svg",
   "config": {},
   "is_active": true
 }
