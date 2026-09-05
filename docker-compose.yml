@@ -318,17 +318,20 @@ services:
       - "traefik.http.services.plumoai-public-api.loadbalancer.server.port=8080"
       - "traefik.http.routers.plumoai-public-api.middlewares=sec-headers,ratelimit"
 
-      # websocket-api routes: /ws/* (prefix kept; WebSocket upgrade — doc/project/
-      # ai_employee workflow execution). Its /internal/* HTTP routes are deliberately
-      # NOT exposed here — they're same-server-only (see websocket-api's
-      # internal-auth.middleware.ts), reachable only from inside the Docker network.
-      - "traefik.http.routers.plumoai-websocket-api.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/ws`)"
+      # websocket-api routes: external /api/websocket/* -> stripped to /* -> nginx's
+      # existing /ws/ location, so clients hit /api/websocket/ws/doc,
+      # /api/websocket/ws/project, /api/websocket/ws/ai_employee/workflow/execution.
+      # Its /internal/* HTTP routes are deliberately NOT exposed here — they're
+      # same-server-only (see websocket-api's internal-auth.middleware.ts),
+      # reachable only from inside the Docker network.
+      - "traefik.http.routers.plumoai-websocket-api.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/api/websocket`)"
       - "traefik.http.routers.plumoai-websocket-api.entrypoints=websecure"
       - "traefik.http.routers.plumoai-websocket-api.tls.certresolver=mytlschallenge"
       - "traefik.http.routers.plumoai-websocket-api.priority=175"
       - "traefik.http.routers.plumoai-websocket-api.service=plumoai-websocket-api"
       - "traefik.http.services.plumoai-websocket-api.loadbalancer.server.port=8080"
-      - "traefik.http.routers.plumoai-websocket-api.middlewares=sec-headers,ratelimit"
+      - "traefik.http.middlewares.websocket-strip.stripprefix.prefixes=/api/websocket"
+      - "traefik.http.routers.plumoai-websocket-api.middlewares=websocket-strip,sec-headers,ratelimit"
 
   # ------------------- AI Service (internal only — no exposed URL) -------------------
   # Other services call it by hostname: http://ai:<port> (e.g. http://ai:3000)

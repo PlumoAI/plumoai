@@ -5,7 +5,7 @@
 #   /api/auth/*    → auth-service:3000 (priority 200; never send /api to main-app)
 #   /api/company/* → plumoai-api:8080 (priority 100; company-api side, prefix stripped)
 #   /api/v1/*      → plumoai-api:8080 (priority 150; public-api side, prefix kept)
-#   /ws/*          → plumoai-api:8080 (priority 175; websocket-api side, WebSocket upgrade)
+#   /api/websocket/* → plumoai-api:8080 (priority 175; websocket-api side, stripped to /ws/*)
 #   /*             → main-app (priority 1, fallback for non-API only)
 #
 # Traefik starts with the stack and listens on LOCALHOST_PORT immediately.
@@ -97,9 +97,10 @@ services:
       - "traefik.http.services.plumoai-public-api.loadbalancer.server.port=8080"
       - "traefik.http.routers.plumoai-public-api-http.middlewares=sec-headers,ratelimit"
 
-      - "traefik.http.routers.plumoai-websocket-api-http.rule=PathPrefix(`/ws`)"
+      - "traefik.http.routers.plumoai-websocket-api-http.rule=PathPrefix(`/api/websocket`)"
       - "traefik.http.routers.plumoai-websocket-api-http.entrypoints=web"
       - "traefik.http.routers.plumoai-websocket-api-http.priority=175"
       - "traefik.http.routers.plumoai-websocket-api-http.service=plumoai-websocket-api"
       - "traefik.http.services.plumoai-websocket-api.loadbalancer.server.port=8080"
-      - "traefik.http.routers.plumoai-websocket-api-http.middlewares=sec-headers,ratelimit"
+      - "traefik.http.middlewares.websocket-strip.stripprefix.prefixes=/api/websocket"
+      - "traefik.http.routers.plumoai-websocket-api-http.middlewares=websocket-strip,sec-headers,ratelimit"
