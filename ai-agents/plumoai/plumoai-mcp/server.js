@@ -7,6 +7,14 @@ function plumoApiV1Base() {
     const raw = process.env.PLUMO_API_BASE_URL?.trim() ?? "https://api.plumoai.com/v1";
     return raw.replace(/\/+$/, "");
 }
+// Base URL for the /oauth/me token-verification call, overridable for self-hosted
+// deployments (e.g. Auth_URL=http://auth:3000) via the same env var convention
+// used across company-api/public-api/websocket-api. Defaults to the SaaS auth
+// host so existing hosted usage is unaffected.
+function authApiBase() {
+    const raw = (process.env.Auth_URL || process.env.AUTH_URL || "").trim();
+    return raw ? raw.replace(/\/+$/, "") : "https://api.plumoai.com/auth";
+}
 const OAUTH_ME_TTL_MS = 60000;
 const oauthMeCache = new Map();
 const RECORD_LIST_FIELD_OPERATOR_LABELS = [
@@ -250,7 +258,7 @@ const server = new FastMCP({
                 me = cached.value;
             }
             else {
-                var response = await axios.get(`https://api.plumoai.com/auth/oauth/me`, {
+                var response = await axios.get(`${authApiBase()}/oauth/me`, {
                     timeout: 1500,
                     headers: {
                         Authorization: authHeader,
