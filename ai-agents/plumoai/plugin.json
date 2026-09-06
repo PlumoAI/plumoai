@@ -1,17 +1,19 @@
 {
   "plugin_id": "plumoai",
   "app_codes": ["plumoai"],
-  "type": "mcp_wrapper",
+  "type": "python_tool_agent",
   "display_name": "PlumoAi",
   "description": "PlumoAI's own AI Employees/CRM product exposed as an MCP server: workspaces, AI Employees, tables (work item types), pipelines, workflow statuses, and records. Lets this AI Digital Employee list AI Employees, inspect table/pipeline/status structure, and list/create/update/comment on records, strictly based on the permissions of the connected plumoai credentials.",
   "required_fields": [],
   "service_provider_code": "plumoai",
   "icon": "plumoai.svg",
+  "app_type":"mcp",
   "config": {
     "server_type": "stdio",
     "command": "node",
     "args": ["/opt/plumoai/ai_agents/plumoai/plumoai-mcp/start-stdio.js"],
-    "cwd": "/opt/plumoai/ai_agents/plumoai/plumoai-mcp"
+    "cwd": "/opt/plumoai/ai_agents/plumoai/plumoai-mcp",
+    "env": { "PLUMO_API_BASE_URL" : "http://plumoai-api:3010/api/v1"}
   },
   "entrypoint": "entrypoint.py",
   "triggers": [
@@ -153,3 +155,4 @@
     }
   }
 }
+

@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from backend.services.ai_agents.base_tool_agent import BaseToolAgent
+
+from llm_tools.mcp_agent_tool import MCPAgentTool
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +76,7 @@ class PlumoAIMCPAgentTool(BaseToolAgent):
 
         async for event in self._delegate.run(**run_kwargs):
             yield event
+
 
 
 async def create_tool_agent(
@@ -297,6 +301,21 @@ async def build_param_options(
         return []
 
     from backend.services.tool_agent_factory import ToolAgentFactory
+   
+    active = app_config
+    service_credential = app_config.get("service_credential") or {}
+    connected_service_id = service_credential.get("connected_service_id")
+    stdio_entrypoint = os.path.join(os.path.dirname(__file__), "plumoai-mcp", "start-stdio.js")
+    stdio_cwd = os.path.dirname(stdio_entrypoint)
+
+    # logger.info(
+    #     "PlumoAI MCP config build: active_config=%s service_credential_present=%s connected_service_id=%s app_config_keys=%s",
+    #     json.dumps(active, default=str),
+    #     bool(service_credential),
+    #     connected_service_id,
+    #     list(app_config.keys()),
+    # )
+
 
     agent = await ToolAgentFactory._create_mcp_agent(
         app_code="plumoai",
