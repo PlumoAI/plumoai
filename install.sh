@@ -489,6 +489,17 @@ if ! $COMPOSE_BIN $ENV_ARGS $COMPOSE_FILES up -d --remove-orphans; then
   exit 1
 fi
 
+echo "  Installing plumoai-mcp dependencies in ai-service (if present)..."
+if ! $COMPOSE_BIN $ENV_ARGS $COMPOSE_FILES exec -T ai sh -c '
+  if [ -d /opt/plumoai/ai_agents/plumoai/plumoai-mcp ]; then
+    cd /opt/plumoai/ai_agents/plumoai/plumoai-mcp && npm i
+  else
+    echo "plumoai-mcp not present, skipping npm i"
+  fi
+'; then
+  echo "Warning: npm i in plumoai-mcp failed (non-fatal, plumoai MCP agent may not work)." >&2
+fi
+
 echo ""
 echo "Image versions running (tags are mutable — record these digests if you need to prove"
 echo "exactly what was deployed, or to pin them later via docker-compose.override.yml):"
