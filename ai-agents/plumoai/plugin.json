@@ -1,7 +1,7 @@
 {
   "plugin_id": "plumoai",
   "app_codes": ["plumoai"],
-  "type": "python_tool_agent",
+  "type": "mcp_wrapper",
   "display_name": "PlumoAi",
   "description": "PlumoAI's own AI Employees/CRM product exposed as an MCP server: workspaces, AI Employees, tables (work item types), pipelines, workflow statuses, and records. Lets this AI Digital Employee list AI Employees, inspect table/pipeline/status structure, and list/create/update/comment on records, strictly based on the permissions of the connected plumoai credentials.",
   "required_fields": [],
