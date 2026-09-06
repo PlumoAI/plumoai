@@ -434,13 +434,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "  Installing plumoai-mcp dependencies in ai-service (if present)..." -ForegroundColor Gray
-$mcpInstallScript = @'
-if [ -d /opt/plumoai/ai_agents/plumoai/plumoai-mcp ]; then
-  cd /opt/plumoai/ai_agents/plumoai/plumoai-mcp && npm i
-else
-  echo "plumoai-mcp not present, skipping npm i"
-fi
-'@
+$mcpInstallScript = 'if [ -d /opt/plumoai/ai_agents/plumoai/plumoai-mcp ]; then cd /opt/plumoai/ai_agents/plumoai/plumoai-mcp && npm i; else echo "plumoai-mcp not present, skipping npm i"; fi'
 & docker ($dockerArgs + @("exec", "-T", "ai", "sh", "-c", $mcpInstallScript))
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Warning: npm i in plumoai-mcp failed (non-fatal, plumoai MCP agent may not work)." -ForegroundColor Yellow
