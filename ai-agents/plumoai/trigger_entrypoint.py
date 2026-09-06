@@ -12,7 +12,7 @@ from backend.services.ai_agents.connected_service_trigger_agent import Connected
 
 logger = logging.getLogger(__name__)
 
-_AUTOMATIONS_TRIGGER_URL = "http://localhost:3010/api/v1/automations/trigger"
+_AUTOMATIONS_TRIGGER_URL = "http://plumoai-api:3010/api/v1/automations/trigger"
 
 # Internal record_events values ("created"/"updated") -> the literal event
 # strings the automations/trigger API expects.

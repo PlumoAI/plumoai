@@ -8,8 +8,13 @@
   "service_provider_code": "plumoai",
   "icon": "plumoai.svg",
   "config": {
-    "server_type": "http",
-    "url": "https://mcp.plumoai.com/mcp"
+    "server_type": "stdio",
+    "command": "node",
+    "args": ["plumoai-mcp/start-stdio.js"],
+    "cwd": "plumoai-mcp",
+    "env": {
+      "PLUMO_API_BASE_URL": "http://plumoai-api:3010/api/v1"
+    }
   },
   "entrypoint": "entrypoint.py",
   "triggers": [
