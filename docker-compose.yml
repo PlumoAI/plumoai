@@ -366,6 +366,12 @@ services:
       AUTH_URL: ${AUTH_URL:-http://auth:3000}
       # company-api now lives in the merged plumoai-api container (was its own "company" host)
       COMPANY_URL: ${COMPANY_URL:-http://plumoai-api:3001}
+      # websocket-api's /internal/* HTTP endpoints only accept same-server callers
+      # (TCP peer 127.0.0.1/::1 — see internal-auth.middleware.ts, no token check).
+      # A direct call from this container's own IP would get 403'd, so this MUST
+      # go through nginx on :8080 (same container as websocket-api, loopback to
+      # it) rather than websocket-api's own port 2999 directly.
+      WEBSOCKET_URL: ${WEBSOCKET_URL:-http://plumoai-api:8080}
       PORT: ${PORT:-3002}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       AGENT_VERSION: v2
