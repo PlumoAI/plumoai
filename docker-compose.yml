@@ -273,6 +273,9 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       LOG_LEVEL: info
+      # company-api calls public-api's /internal/v1/* (e.g. records/convert-ids) —
+      # same container now, so loopback on public-api's own port (:3010).
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3010}
       # ---- public-api ----
       AUTH_API_BASE_URL: ${AUTH_API_BASE_URL:-http://auth:3000}
       # company-api is now the SAME container (loopback on :3001), not a separate "company" host
