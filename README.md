@@ -205,9 +205,15 @@ A single AI Employee (Just like human) can use **multiple AI Agents simultaneous
 
 ### Build or update an AI Agent tool
 
-AI Agent tools live in `ai-agents/` in this repo and are mounted into the `ai-service` container at runtime.
+AI Agent tools live in `ai-agents/` in this repo and are mounted into the `ai-service` container at runtime. Reusable auth providers (Google, Microsoft, etc.) live alongside them in `service-providers/`.
 
 - Guide: [AI Agent Tool Creation Guide](docs/AI_AGENT_PLUGIN_CREATION_GUIDE.md)
+
+### Build or update a Workflow Node
+
+Deterministic, no-LLM workflow-builder building blocks (transform, filter, batch/loop, schedule-trigger, etc.) live in `nodes/` in this repo and are mounted into the `ai-service` container the same way. Use a Node for deterministic data/flow-control steps and an AI Agent for anything that reasons over natural language or calls a vendor API on behalf of a connected account.
+
+- Guide: [Workflow Node Creation Guide](docs/NODE_CREATION_GUIDE.md)
 
 ---
 

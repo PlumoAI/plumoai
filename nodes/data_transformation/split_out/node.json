@@ -1,0 +1,44 @@
+{
+  "node_id": "data_transformation.split_out",
+  "category": "Data Transformation",
+  "display_name": "Split Out",
+  "description": "Turn a list inside each item into separate items, one per array element.",
+  "icon": "split_out.svg",
+  "entrypoint": "entrypoint.py",
+  "config": {
+    "outputPorts": [{ "portId": "output", "portName": "Output" }],
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "fieldsToSplitOut": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Field path(s) (dot notation, e.g. \"data.results\") whose array values should each become a separate output item. When multiple fields are given, their arrays are zipped together by index."
+        },
+        "include": {
+          "type": "string",
+          "enum": ["noOtherFields", "allOtherFields", "selectedOtherFields"],
+          "default": "noOtherFields",
+          "description": "Which other fields from the original item to carry into each split-out item."
+        },
+        "fieldsToInclude": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Field paths to carry over when include is \"selectedOtherFields\"."
+        },
+        "destinationFieldName": {
+          "type": "string",
+          "description": "When splitting exactly one field, rename its output key to this instead of keeping the original field path."
+        },
+        "disableDotNotation": {
+          "type": "boolean",
+          "default": false,
+          "description": "Treat field paths as literal keys instead of dot-notation nested paths."
+        }
+      },
+      "required": ["fieldsToSplitOut"],
+      "additionalProperties": false
+    }
+  }
+}

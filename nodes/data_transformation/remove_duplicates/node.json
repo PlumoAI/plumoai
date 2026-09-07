@@ -1,0 +1,35 @@
+{
+  "node_id": "data_transformation.remove_duplicates",
+  "category": "Data Transformation",
+  "display_name": "Remove Duplicates",
+  "description": "Remove items from the incoming list that duplicate an earlier item, comparing all fields or a chosen subset.",
+  "icon": "remove_duplicates.svg",
+  "entrypoint": "entrypoint.py",
+  "config": {
+    "outputPorts": [{ "portId": "output", "portName": "Output" }],
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "compare": {
+          "type": "string",
+          "enum": ["allFields", "allFieldsExceptSelected", "selectedFields"],
+          "default": "allFields",
+          "description": "Which fields to use when deciding whether two items are duplicates."
+        },
+        "fieldsToCompare": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Field paths (dot notation) used when compare is not \"allFields\": the fields to exclude for \"allFieldsExceptSelected\", or the only fields compared for \"selectedFields\"."
+        },
+        "disableDotNotation": {
+          "type": "boolean",
+          "default": false,
+          "description": "Treat field paths as literal keys instead of dot-notation nested paths."
+        }
+      },
+      "required": ["compare"],
+      "additionalProperties": false
+    }
+  }
+}

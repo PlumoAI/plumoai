@@ -1,0 +1,86 @@
+{
+  "node_id": "trigger.schedule_trigger_node",
+  "category": "Trigger Nodes",
+  "display_name": "Schedule Trigger",
+  "description": "Starts the workflow on a one-time or recurring time-based schedule. The schedule itself is registered externally (by the scheduler agent) after the workflow is saved; this node documents/configures that schedule's shape at the start of the DAG.",
+  "icon": "schedule.svg",
+  "entrypoint": "entrypoint.py",
+  "config": {
+    "inputPorts": [],
+    "outputPorts": [{ "portId": "output", "portName": "Output" }],
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "scheduleType": {
+          "type": "string",
+          "enum": ["One Time", "Recurring"]
+        },
+        "timeOfDay": {
+          "type": "string",
+          "format": "time",
+          "description": "24-hour \"HH:MM\" (UTC) the schedule fires at."
+        },
+        "delayMinutes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Fire this many minutes from when the schedule is registered, instead of a fixed timeOfDay."
+        },
+        "frequency": {
+          "type": "string",
+          "enum": ["Minutely", "Hourly", "Daily", "Weekly"],
+          "description": "Recurrence cadence. Combined with interval/byDay into the RRULE actually scheduled."
+        },
+        "interval": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Repeat every N units of frequency (e.g. frequency=Daily, interval=3 -> every 3 days)."
+        },
+        "byDay": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+          },
+          "description": "Which weekdays to run on. Only applies when frequency=Weekly; defaults to Monday if omitted."
+        },
+        "endDate": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO date after which the schedule stops firing."
+        },
+        "maxRuns": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Stop the schedule after this many firings."
+        }
+      },
+      "required": ["scheduleType"],
+      "allOf": [
+        {
+          "if": { "properties": { "scheduleType": { "const": "One Time" } } },
+          "then": {
+            "properties": { "timeOfDay": {}, "delayMinutes": {} },
+            "required": ["timeOfDay"]
+          }
+        },
+        {
+          "if": { "properties": { "scheduleType": { "const": "Recurring" } } },
+          "then": {
+            "properties": { "frequency": {}, "interval": {}, "endDate": {}, "maxRuns": {} },
+            "required": ["frequency"]
+          }
+        },
+        {
+          "if": { "properties": { "frequency": { "const": "Weekly" } } },
+          "then": { "properties": { "byDay": {} } }
+        },
+        {
+          "if": { "properties": { "frequency": { "enum": ["Daily", "Weekly"] } } },
+          "then": { "properties": { "timeOfDay": {} } }
+        }
+      ],
+      "additionalProperties": false
+    }
+  }
+}

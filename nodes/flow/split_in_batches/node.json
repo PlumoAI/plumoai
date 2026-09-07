@@ -1,0 +1,31 @@
+{
+  "node_id": "flow.split_in_batches",
+  "category": "Flow",
+  "display_name": "Split In Batches",
+  "description": "Loop over the incoming items in fixed-size batches. Wire its \"loop\" output back into this node (through the loop body) and its \"done\" output to whatever runs after the loop finishes.",
+  "icon": "split_in_batches.svg",
+  "entrypoint": "entrypoint.py",
+  "config": {
+    "outputPorts": [
+      { "portId": "done", "portName": "Done" },
+      { "portId": "loop", "portName": "Loop" }
+    ],
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "batchSize": {
+          "type": "number",
+          "default": 1,
+          "description": "Number of items to emit on the \"loop\" output per pass."
+        },
+        "reset": {
+          "type": "boolean",
+          "default": false,
+          "description": "Start over from the incoming items on the next execution instead of resuming from the current batch position."
+        }
+      },
+      "required": ["batchSize"],
+      "additionalProperties": false
+    }
+  }
+}
