@@ -1,7 +1,7 @@
 ## 🚀 PlumoAI - We are in Public Beta from 7-Sep-2026. If you find any issues during setup then Join our Discord Live Support call on https://discord.gg/WarY2yWZkg 
 <img width="1024" height="388" alt="PlumoAIlogo" src="https://github.com/user-attachments/assets/43d692bd-912c-44eb-b13b-0a2ed0a1ce6e" />
 
-## 🌍 World's First 100% FREE Autonomous pre-trained AI Employee Platform OR you can say AI Employees OS (Operating System)
+## 🌍 World's First 100% FREE Autonomous pre-trained AI Employees Platform OR you can say AI Employees OS (Operating System)
 
 ![GitHub stars](https://img.shields.io/github/stars/PlumoAI/plumoai?style=social)
 ![License](https://img.shields.io/badge/license-PlumoAI-blue)
