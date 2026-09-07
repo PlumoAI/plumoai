@@ -2,7 +2,7 @@
 # Usage: .\install.ps1
 #        .\install.ps1 -Fresh
 
-param([switch]$Fresh)
+param([switch]$Fresh, [switch]$NoBackup)
 
 $ErrorActionPreference = "Stop"
 
@@ -52,6 +52,12 @@ function Test-Placeholder {
 
 function New-RandomBase64 {
     return [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }) -as [byte[]])
+}
+
+function New-RandomAlnum {
+    param([int]$Length = 37)
+    $chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+    return -join (1..$Length | ForEach-Object { $chars[(Get-Random -Maximum $chars.Length)] })
 }
 
 # .env location
@@ -155,6 +161,10 @@ if ($RUN_MODE -ne "localhost") {
     }
 }
 
+# Public base URL of the app (e.g. auth uses this to build email verification/reset links).
+$APP_HOST = if ($RUN_MODE -eq "localhost") { "http://localhost:$LOCALHOST_PORT" } else { "https://$DOMAIN_NAME" }
+Set-EnvValue $ENV_FILE "APP_HOST" $APP_HOST
+
 function Test-EmailProviderNeedsPrompt {
     param([string]$Val)
     return [string]::IsNullOrWhiteSpace($Val) -or ($Val -like "*<*" )
@@ -240,6 +250,45 @@ if ([Environment]::UserInteractive -and (Test-Placeholder $OPENAI_API_KEY_KNOWLE
     }
 }
 
+function Test-AiProviderNeedsPrompt {
+    param([string]$Val)
+    return [string]::IsNullOrWhiteSpace($Val) -or ($Val -like "*<*")
+}
+
+$AI_PROVIDER = Get-EnvValue $ENV_FILE "AI_PROVIDER"
+
+# Optional: default LLM provider/model for the AI service (voice/knowledgebase agents).
+# If skipped, the AI service auto-picks whichever provider below actually has a key configured.
+if ([Environment]::UserInteractive -and (Test-AiProviderNeedsPrompt $AI_PROVIDER)) {
+    Write-Host ""
+    Write-Host "Default LLM Provider:"
+    Write-Host "  1) OpenRouter (default)"
+    Write-Host "  2) OpenAI"
+    Write-Host "  3) Skip for now (auto-picks whichever key below is set; edit .env later)"
+    $llmChoice = Read-Host "Choose [1/2/3] (Enter = 1)"
+    switch ($llmChoice) {
+        "2" {
+            Set-EnvValue $ENV_FILE "AI_PROVIDER" "openai"
+            $oaKey = Read-Host "OPENAI_API_KEY"
+            if (![string]::IsNullOrWhiteSpace($oaKey)) { Set-EnvValue $ENV_FILE "OPENAI_API_KEY" $oaKey }
+            $oaModel = Read-Host "OPENAI_MODEL [gpt-4o-mini]"
+            if ([string]::IsNullOrWhiteSpace($oaModel)) { $oaModel = "gpt-4o-mini" }
+            Set-EnvValue $ENV_FILE "OPENAI_MODEL" $oaModel
+        }
+        "3" {
+            # leave AI_PROVIDER unset; AI service auto-detects from whichever key is present
+        }
+        default {
+            Set-EnvValue $ENV_FILE "AI_PROVIDER" "openrouter"
+            $orKey = Read-Host "OPENROUTER_API_KEY"
+            if (![string]::IsNullOrWhiteSpace($orKey)) { Set-EnvValue $ENV_FILE "OPENROUTER_API_KEY" $orKey }
+            $orModel = Read-Host "OPENROUTER_MODEL [openai/gpt-4o-mini]"
+            if ([string]::IsNullOrWhiteSpace($orModel)) { $orModel = "openai/gpt-4o-mini" }
+            Set-EnvValue $ENV_FILE "OPENROUTER_MODEL" $orModel
+        }
+    }
+}
+
 $STORAGE_BACKEND = Get-EnvValue $ENV_FILE "STORAGE_BACKEND"
 $LOCAL_STORAGE_HOST_PATH = Get-EnvValue $ENV_FILE "LOCAL_STORAGE_HOST_PATH"
 $LOCAL_STORAGE_CONTAINER_PATH = Get-EnvValue $ENV_FILE "LOCAL_STORAGE_CONTAINER_PATH"
@@ -310,6 +359,17 @@ foreach ($s in $secrets) {
     }
 }
 
+# app_secret: backs PLUMOAI_PUBLIC_API_ENCRYPTION_KEY. Kept as a secrets/*.txt file (same
+# as the DB passwords above) rather than only in .env. 37 lowercase alnum chars.
+$appSecretPath = Join-Path "secrets" "app_secret.txt"
+if (!(Test-Path $appSecretPath)) {
+    New-RandomAlnum -Length 37 | Out-File -FilePath $appSecretPath -Encoding ascii -NoNewline
+    Write-Host "  Created new app_secret"
+} else {
+    Write-Host "  Keeping existing app_secret"
+}
+Set-EnvValue $ENV_FILE "PLUMOAI_PUBLIC_API_ENCRYPTION_KEY" (Get-Content $appSecretPath -Raw)
+
 # Docker bind-mounts .sh from Windows with CRLF: dash sees "set -e^M" -> "set: Illegal option -". Force LF.
 function Repair-DockerMountLineEndings {
     param([string]$Root)
@@ -337,6 +397,21 @@ if ($RUN_MODE -eq "localhost") { $dockerArgs += "-f", "docker-compose.local.yml"
 
 Write-Host "Starting services..." -ForegroundColor Cyan
 if ($Fresh) {
+    $mysqlRunning = & docker ($dockerArgs + @("ps", "--status", "running", "mysql")) 2>$null | Select-String "mysql"
+    if ($NoBackup) {
+        Write-Host "  Fresh install: -NoBackup passed, skipping backup before data loss." -ForegroundColor Gray
+    } elseif ($mysqlRunning) {
+        Write-Host "  Fresh install: backing up existing data first (this deletes the MySQL volume)..." -ForegroundColor Gray
+        $backupDir = "backups/pre-fresh-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+        & (Join-Path $PSScriptRoot "scripts/backup.ps1") -OutDir $backupDir
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Error: backup failed. Aborting -Fresh so no data is lost." -ForegroundColor Red
+            Write-Host "  Re-run with -Fresh -NoBackup to skip the backup and proceed anyway." -ForegroundColor Red
+            exit 1
+        }
+    } else {
+        Write-Host "  Fresh install: no running MySQL found, nothing to back up." -ForegroundColor Gray
+    }
     Write-Host "  Fresh install: stopping existing stack..." -ForegroundColor Gray
     & docker ($dockerArgs + @("down", "--remove-orphans", "--timeout", "20")) 2>$null
     if ($LASTEXITCODE -ne 0) {
@@ -357,6 +432,18 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "Error: failed to start services. Run '$composeHint' for details." -ForegroundColor Red
     exit 1
 }
+
+Write-Host "  Installing plumoai-mcp dependencies in ai-service (if present)..." -ForegroundColor Gray
+$mcpInstallScript = 'if [ -d /opt/plumoai/ai_agents/plumoai/plumoai-mcp ]; then cd /opt/plumoai/ai_agents/plumoai/plumoai-mcp && npm i; else echo plumoai-mcp not present, skipping npm i; fi'
+& docker ($dockerArgs + @("exec", "-T", "ai", "sh", "-c", $mcpInstallScript))
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Warning: npm i in plumoai-mcp failed (non-fatal, plumoai MCP agent may not work)." -ForegroundColor Yellow
+}
+
+Write-Host ""
+Write-Host "Image versions running (tags are mutable -- record these digests if you need to prove" -ForegroundColor Gray
+Write-Host "exactly what was deployed, or to pin them later via docker-compose.override.yml):" -ForegroundColor Gray
+& docker ($dockerArgs + @("images")) 2>$null
 
 Write-Host ""
 if ($RUN_MODE -eq "localhost") {

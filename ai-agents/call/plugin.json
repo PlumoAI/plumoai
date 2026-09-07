@@ -4,6 +4,7 @@
   "type": "python_tool_agent",
   "display_name": "Call Agent",
   "description": "Initiates and manages voice calls connected to the AI agent.",
+  "icon": "call.svg",
   "entrypoint": "entrypoint.py"
 }
 

@@ -1,0 +1,20 @@
+{
+  "node_id": "data_transformation.limit",
+  "category": "Data Transformation",
+  "display_name": "Limit",
+  "description": "Keep only the first or last N items of the incoming list.",
+  "icon": "limit.svg",
+  "entrypoint": "entrypoint.py",
+  "config": {
+    "outputPorts": [{ "portId": "output", "portName": "Output" }],
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "count": { "type": "number" },
+        "position": { "type": "string", "enum": ["first", "last"], "default": "first" }
+      },
+      "required": ["count"],
+      "additionalProperties": false
+    }
+  }
+}

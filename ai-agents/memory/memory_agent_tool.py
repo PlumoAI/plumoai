@@ -17,6 +17,7 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Set
 from backend.services.ai_agents.base_tool_agent import BaseToolAgent
 
 from .api_client import MemoryApiClient
+from .callback_engine import MemoryCallbackEngine
 from .constants import (
     COMPANY_URL,
     IMPORTANCE_THRESHOLD,
@@ -28,6 +29,7 @@ from .events import AgentEvent, event
 from .json_utils import parse_json_response
 from .llm_client import MemoryLlmClient
 from .normalization import normalize_memories
+from .self_learner import SelfLearner
 from .scoring import (
     log_freq,
     count_similar_in_list,
@@ -122,6 +124,10 @@ OPERATIONS (tool_args.operation):
         # Dynamically extended tool codes from connected apps (merged with KNOWN_TOOL_CODES)
         self._connected_tool_codes: frozenset[str] = frozenset()
 
+        # Implicit learning + auto-maintenance hooks (wired after self is fully constructed)
+        self._self_learner = SelfLearner(agent=self, llm_provider=llm_provider)
+        self._callback_engine = MemoryCallbackEngine(agent=self, self_learner=self._self_learner)
+
     def set_connected_tool_codes(self, codes: List[str]) -> None:
         if codes:
             self._connected_tool_codes = frozenset(c.strip().lower() for c in codes if c)
@@ -158,11 +164,8 @@ OPERATIONS (tool_args.operation):
         import asyncio
 
         try:
-            personal_data, shared_data = await asyncio.gather(
-                self._api.list(limit=20, offset=0, mem_type=None),
-                self._api.list_shared(limit=10, offset=0),
-                return_exceptions=True,
-            )
+            personal_data = await self._api.list(limit=20, offset=0, min_importance=0.20)
+            shared_data = await self._api.list_shared(limit=10, offset=0)
             personal_raw = personal_data.get("memories", []) if isinstance(personal_data, dict) else []
             shared_raw = shared_data.get("memories", []) if isinstance(shared_data, dict) else []
             if not personal_raw and not shared_raw:
@@ -180,60 +183,32 @@ OPERATIONS (tool_args.operation):
             memories.sort(key=lambda m: float(m.get("importance_score") or 0), reverse=True)
             candidates = memories[:20]
 
-            numbered = "\n".join(
-                f"{i + 1}. [scope={m.get('scope','personal')} type={m.get('type','unknown')}] {m.get('content', '').strip()}"
-                for i, m in enumerate(candidates)
-            )
+            # Deterministic filter — include any stored memory above a floor importance.
+            # Memories only exist because the LLM decided to store them, so they're all worth
+            # injecting. Sort by importance descending, cap at 8.
+            _MIN_INJECT_IMPORTANCE = 0.20
+            always_on = [
+                m for m in candidates
+                if float(m.get("importance_score") or 0) >= _MIN_INJECT_IMPORTANCE
+            ]
+            always_on.sort(key=lambda m: float(m.get("importance_score") or 0), reverse=True)
 
-            prompt = f"""You are reviewing stored memories for an AI assistant.
-
-STORED MEMORIES:
-{numbered}
-
-TASK:
-Build the MINIMAL "always-on" context the agent must carry into EVERY turn.
-This is NOT a static category split — decide dynamically based on usefulness.
-
-Include only what must be applied globally and continuously, such as:
-  - Standing behavioral rules (tone, language, address style, strict constraints)
-  - Safety/authority rules (who the agent should obey, access constraints)
-  - Critical identity facts that would break the conversation if forgotten
-    (e.g. user's name IF the user consistently expects it, accessibility needs)
-
-Exclude:
-  - One-off episodic details
-  - Long lists or anything that should be recalled on demand instead
-
-If you include facts, write them as short, standalone statements.
-
-Respond with JSON only:
-{{
-  "inject": true | false,
-  "context": "A concise, ready-to-use ALWAYS-ON context block (plain text). Empty string if none.",
-  "reason": "one sentence explaining why this must be always-on"
-}}"""
-
-            raw = await self._llm.generate_json(prompt, max_tokens=300)
-            if not raw:
+            if not always_on:
                 return ""
 
-            parsed = parse_json_response(
-                raw,
-                required_keys=["inject", "context", "reason"],
-                defaults={"inject": False, "context": "", "reason": ""},
-            )
-            if not parsed or not parsed.get("inject"):
-                return ""
-
-            ctx_text = (parsed.get("context") or "").strip()
+            lines = [
+                f"- [{m.get('type', '?')}] {m.get('content', '').strip()}"
+                for m in always_on[:8]
+            ]
+            ctx_text = "\n".join(lines)[:800].strip()
             if not ctx_text:
                 return ""
 
-            logger.info("🧠 [Memory] Always-on context injected (%d chars): %s", len(ctx_text), ctx_text[:120])
+            logger.info("🧠 [Memory] Always-on context injected (%d chars, %d memories, no LLM call)", len(ctx_text), len(always_on))
             return (
                 "\n\n🚨 ALWAYS-ON MEMORY CONTEXT — apply to EVERY response without exception:\n"
                 f"{ctx_text}\n"
-                "(This block is dynamically derived from long-term memory. "
+                "(This block is derived from long-term memory. "
                 "Treat it as mandatory unless the user explicitly changes it.)"
             )
         except Exception as exc:
@@ -245,12 +220,12 @@ Respond with JSON only:
     def _scores_for_api(self, eval_result: Dict[str, Any]) -> Dict[str, float]:
         identity = float(eval_result.get("identity_score") or 0)
         goal = float(eval_result.get("goal_relevance") or 0)
-        freq = float(eval_result.get("frequency") or 0)
         emotional = float(eval_result.get("emotional_weight") or 0)
+        importance = float(eval_result.get("importance") or 0)
         return {
             "recency": round(emotional, 4),
             "relevance": round((identity + goal) / 2, 4),
-            "frequency": round(freq, 4),
+            "frequency": round(importance, 4),
         }
 
     async def _safe_patch(self, memory_id: Optional[str], updates: Dict[str, Any]) -> bool:
@@ -367,66 +342,65 @@ OR if no contradiction:
         log_freq_score = log_freq(similarity_count)
         type_str = f" (Type hint: {type_hint})" if type_hint else ""
 
-        prompt = f"""You are a memory importance evaluator for an autonomous AI agent.
-Score the following information on four dimensions (0.0 – 1.0 each).
+        existing_snippets = ""
+        if existing_memories:
+            lines = [f'  - "{(m.get("content") or "")[:80]}"' for m in existing_memories[:5]]
+            existing_snippets = "\nExisting memories that were recalled for context:\n" + "\n".join(lines)
+
+        prompt = f"""You are a long-term memory evaluator for an autonomous AI assistant.
+Decide whether the following information should be permanently stored in memory.
 
 Information to evaluate{type_str}:
 "{content}"
-
-Context:
+{existing_snippets}
+Signal context:
 - {similarity_count} semantically similar memories already stored
 - Average retrieval count of similar memories: {avg_access:.1f}
-- Log-scaled frequency signal: {log_freq_score:.2f}  ← use this as your frequency score
 
-━━━ DIMENSION DEFINITIONS ━━━
+━━━ HOW TO SCORE importance (0.0–1.0) ━━━
+Rate how much the AI NEEDS to remember this across ALL future conversations.
+Think like a human brain: what would you store in long-term memory?
 
-1. identity_score  — How permanently and broadly does this shape all future interactions?
-   Score 0.7–1.0 for ANY of:
-     • Direct identity: name, job title, location, relationships, or contact/identifier details (e.g. email, phone) the user shares for future use
-     • Behavioral identity: communication language/script ("always in urdu roman"),
-       address style ("call me sir"), tone preference, response format instructions,
-       authority rules ("only answer to me"), role definitions
-     • Anything the agent MUST remember and apply in EVERY future response
-   Score 0.3–0.6 for context-specific preferences (apply in some situations)
-   Score 0.0–0.2 for transient or one-off statements
+  0.8–1.0 → MUST store: personal identity (name, age, job title, contact info),
+             authority/role rules ("I am your boss"), address style ("call me sir"),
+             communication language/format preferences applied to EVERY response
+  0.5–0.7 → SHOULD store: stated goals, long-term projects, significant preferences,
+             recurring context that shapes many future interactions
+  0.3–0.4 → MIGHT store: context-specific preferences, occasional patterns
+  0.0–0.2 → SKIP: one-off requests, general questions, transient events, commands
 
-2. goal_relevance  — Reveals active goals or strategic direction?
-
-3. frequency       — Use the log-scaled frequency signal ({log_freq_score:.2f}) provided above.
-
-4. emotional_weight — Emphasised, corrected, or emotionally significant?
-
-━━━ THRESHOLD GUIDANCE ━━━
-Set `threshold` to the minimum importance needed to store this content (0.0–1.0).
-  • Behavioral rules / communication preferences that affect ALL responses → 0.25–0.35
-  • Stable identity facts (name, role) → 0.30–0.40
-  • Goal or preference statements → 0.40–0.55
-  • Transient or low-value events → 0.60–0.75
+Set threshold = the minimum importance score required to justify storage:
+  • Personal identity facts (name, age, email, job) → threshold 0.25–0.35
+  • Authority/role/address rules → threshold 0.20–0.30
+  • Behavioral preferences (language, tone, format) → threshold 0.25–0.35
+  • Goal/project statements → threshold 0.35–0.50
+  • Context-specific or low-value → threshold 0.55–0.75
 
 ━━━ ALSO PROVIDE ━━━
-  type            : a short free-form label for the memory category (no fixed list).
-                    TOOL-SCOPE RULE: If the content is a preference, rule, or setting that
-                    applies specifically to a single AI tool (not all responses), PREFIX the
-                    type with the tool code followed by a colon.
+  identity_score  : 0.0–1.0 — how core is this to the user's permanent identity/rules?
+  goal_relevance  : 0.0–1.0 — does this reveal active goals or strategic direction?
+  emotional_weight: 0.0–1.0 — was it emphasised, corrected, or emotionally significant?
+  type            : short free-form label. Tool-scope prefix rule: if the preference applies
+                    to ONE specific tool only, prefix with its code (e.g. "ai_writer:style").
                     Connected tool codes: {self._tool_codes_for_prompt()}.
-  summary         : 1-2 sentence storage-ready concise summary (no filler words)
-  store           : true / false
-  already_covered : true if ANY candidate already captures the same fact (even with different wording)
-  reason          : one sentence explaining the storage decision
-  scope           : "personal" | "shared" (when in doubt, choose personal)
-
-━━━ FORMULA ━━━
-importance = 0.4·identity + 0.3·goal + 0.2·frequency + 0.1·emotional
+  summary         : 1-2 sentence storage-ready version (no pronouns, self-contained)
+  store           : true if importance ≥ threshold, false otherwise
+  already_covered : true ONLY if the EXACT SAME SPECIFIC FACT is already fully captured
+                    in one of the existing memories listed above with the same precision.
+                    A DIFFERENT fact about the same person is NOT covered — e.g. the user's
+                    NAME is not covered by a memory about their ADDRESS PREFERENCE.
+                    When in doubt, set false.
+  reason          : one sentence explaining the decision
+  scope           : "personal" (about this user) | "shared" (applies to all users of this agent)
 
 Output ONLY valid JSON:
 {{
   "identity_score": 0.0,
   "goal_relevance": 0.0,
-  "frequency": 0.0,
   "emotional_weight": 0.0,
   "importance": 0.0,
   "type": "fact",
-  "threshold": 0.5,
+  "threshold": 0.35,
   "summary": "...",
   "store": false,
   "already_covered": false,
@@ -434,13 +408,12 @@ Output ONLY valid JSON:
   "scope": "personal"
 }}"""
 
-        raw = await self._llm.generate_json(prompt, max_tokens=600)
+        raw = await self._llm.generate_json(prompt, max_tokens=500)
         parsed = parse_json_response(
             raw or "",
             required_keys=[
                 "identity_score",
                 "goal_relevance",
-                "frequency",
                 "emotional_weight",
                 "importance",
                 "type",
@@ -454,11 +427,10 @@ Output ONLY valid JSON:
             defaults={
                 "identity_score": 0.0,
                 "goal_relevance": 0.0,
-                "frequency": log_freq_score,
                 "emotional_weight": 0.0,
                 "importance": 0.0,
                 "type": type_hint or "fact",
-                "threshold": self.threshold,
+                "threshold": 0.35,
                 "summary": content[:300],
                 "store": True,
                 "already_covered": False,
@@ -467,45 +439,45 @@ Output ONLY valid JSON:
             },
         )
         if not parsed:
-            # Lightweight fallback when LLM is unreachable: preserve type_hint and log_freq signal.
             return {
                 "identity_score": 0.0,
                 "goal_relevance": 0.0,
-                "frequency": log_freq_score,
                 "emotional_weight": 0.0,
                 "importance": 0.0,
                 "type": (type_hint or "unknown").strip().lower(),
-                "threshold": self.threshold,
+                "threshold": 0.35,
                 "summary": content[:300],
                 "store": True,
                 "already_covered": False,
-                "reason": "LLM unavailable",
+                "reason": "LLM unavailable — defaulting to store",
                 "scope": "personal",
                 "similarity_count": similarity_count,
             }
 
-        identity = max(0.0, min(1.0, float(parsed.get("identity_score") or 0)))
-        goal = max(0.0, min(1.0, float(parsed.get("goal_relevance") or 0)))
-        freq = max(0.0, min(log_freq_score + 0.1, float(parsed.get("frequency") or log_freq_score)))
-        emotional = max(0.0, min(1.0, float(parsed.get("emotional_weight") or 0)))
-        importance = round(0.4 * identity + 0.3 * goal + 0.2 * freq + 0.1 * emotional, 4)
-
+        # Use the LLM's importance directly — it has the full picture
+        importance = round(max(0.0, min(1.0, float(parsed.get("importance") or 0))), 4)
         raw_threshold = parsed.get("threshold")
         try:
             llm_threshold = round(max(0.05, min(0.99, float(raw_threshold))), 4)
         except (TypeError, ValueError):
-            llm_threshold = self.threshold
+            llm_threshold = 0.35
 
-        parsed["identity_score"] = identity
-        parsed["goal_relevance"] = goal
-        parsed["frequency"] = round(freq, 4)
-        parsed["emotional_weight"] = emotional
         parsed["importance"] = importance
         parsed["threshold"] = llm_threshold
         parsed["similarity_count"] = similarity_count
-        parsed["store"] = True
+        # Preserve LLM's store decision — do NOT override it
         raw_scope = str(parsed.get("scope") or "personal").strip().lower()
         parsed["scope"] = "shared" if raw_scope == "shared" else "personal"
+
+        logger.info(
+            "🧠 [Memory] Eval: '%s...' → importance=%.2f threshold=%.2f store=%s already_covered=%s reason=%s",
+            content[:50],
+            importance,
+            llm_threshold,
+            parsed.get("store"),
+            parsed.get("already_covered"),
+            (parsed.get("reason") or "")[:80],
+        )
         return parsed
 
     async def _decompose_content(self, content: str, type_hint: Optional[str]) -> List[Dict[str, Any]]:
@@ -628,27 +600,42 @@ Respond with JSON only:
                     new_access = int(best.get("access_count") or 0) + 1
                     retrieval_boost = compute_retrieval_boost({**best, "access_count": new_access})
                     new_score = round(min(1.0, float(best.get("importance_score") or 0) + retrieval_boost), 4)
-                    await self._safe_patch(
-                        mem_id,
-                        {
-                            "access_count": new_access,
-                            "importance_score": new_score,
-                            "last_accessed_at": datetime.utcnow().isoformat() + "Z",
-                        },
-                    )
+                    patch: Dict[str, Any] = {
+                        "access_count": new_access,
+                        "importance_score": new_score,
+                        "last_accessed_at": datetime.utcnow().isoformat() + "Z",
+                    }
+                    # If the new content is more specific than the existing memory, update content too.
+                    # Human brain naturally refines memories when given more detail.
+                    new_summary = (eval_result.get("summary") or content or "").strip()
+                    existing_content = (best.get("content") or "").strip()
+                    if new_summary and new_summary.lower() != existing_content.lower() and len(new_summary) > len(existing_content) * 0.8:
+                        patch["content"] = new_summary
+                        logger.info(
+                            "🧠 [Memory] Refined existing memory: '%s' → '%s'",
+                            existing_content[:60], new_summary[:60],
+                        )
+                    await self._safe_patch(mem_id, patch)
             return {
                 "ready": False,
                 "stored": False,
                 "duplicate": True,
-                "reason": "LLM identified as already covered by existing memory",
+                "reason": "Already covered — boosted existing memory (content refined if more specific)",
                 "existing_content": candidates[0].get("content") if candidates else None,
             }
 
         inferred_type = eval_result.get("type") or type_hint or "fact"
         threshold = effective_threshold(base_threshold=self.threshold, active_goal=active_goal, eval_result=eval_result)
         importance = float(eval_result.get("importance") or 0)
+        llm_says_store = bool(eval_result.get("store"))
 
-        if importance < threshold:
+        # Gate: block only when LLM explicitly says not to store AND importance is below threshold.
+        # If the LLM says store=true, trust it — it evaluated the content holistically.
+        if not llm_says_store and importance < threshold:
+            logger.info(
+                "🧠 [Memory] NOT storing '%s...' → importance=%.2f < threshold=%.2f, store=%s",
+                content[:50], importance, threshold, llm_says_store,
+            )
             return {
                 "ready": False,
                 "stored": False,
@@ -659,7 +646,6 @@ Respond with JSON only:
                 "scores": {
                     "identity": eval_result.get("identity_score"),
                     "goal_relevance": eval_result.get("goal_relevance"),
-                    "frequency": eval_result.get("frequency"),
                     "emotional_weight": eval_result.get("emotional_weight"),
                 },
             }
@@ -772,6 +758,10 @@ Respond with JSON only:
         if prepared.get("overwritten_id"):
             result["overwrote_memory_id"] = prepared["overwritten_id"]
             result["overwrite_reason"] = (prepared.get("conflicting") or {}).get("_contradiction_reason", "")
+
+        import asyncio as _asyncio
+        _asyncio.create_task(self._callback_engine.on_store(stored=True))
+
         return result
 
     async def _op_store(self, content: str, type_hint: Optional[str], raw_context: Optional[str], active_goal: Optional[str]) -> Dict[str, Any]:
@@ -851,6 +841,12 @@ Respond with JSON only:
 
         stored_count = sum(1 for r in safe_results if r and r.get("stored"))
         logger.info("🧠 [Memory] Bulk multi-store: %d/%d pieces stored (bulk API call: %d payloads)", stored_count, len(pieces), len(bulk_payloads))
+
+        if stored_count:
+            import asyncio as _asyncio
+            for _ in range(stored_count):
+                _asyncio.create_task(self._callback_engine.on_store(stored=True))
+
         return {
             "stored_multiple": True,
             "count": len(pieces),
@@ -1000,6 +996,57 @@ Respond with JSON only:
                 await _asyncio.gather(*patch_tasks, return_exceptions=True)
         return matched
 
+    async def notify_session_end(
+        self,
+        *,
+        user_msg: str = "",
+        assistant_msg: str = "",
+        conversation: str = "",
+    ) -> None:
+        """
+        Awaited hook called by agent_brain at session end (after final response delivered).
+        Runs three operations in sequence — all awaited, never cancelled:
+          1. _op_auto(user_msg)       — store facts revealed in the user's message
+          2. _op_auto(assistant_msg)  — store facts discovered during plan execution
+                                        (CRM data, tool results, etc. summarised in response)
+          3. on_exchange — drive implicit learning counter
+          4. on_session_end — periodic reflect if enough stores accumulated
+        """
+        full_ctx = "\n".join(filter(None, [
+            f"User: {user_msg}" if user_msg else "",
+            f"Assistant: {assistant_msg}" if assistant_msg else "",
+            conversation,
+        ])).strip()
+
+        if user_msg:
+            try:
+                await self._op_auto(user_message=user_msg, conversation=full_ctx)
+            except Exception as exc:
+                logger.debug("notify_session_end _op_auto(user) failed (non-critical): %s", exc)
+
+        # Also extract facts the agent discovered during execution (tool results in response).
+        # The classifier is strict — it only stores stable personal facts, not general knowledge.
+        if assistant_msg and len(assistant_msg.split()) > 8:
+            try:
+                await self._op_auto(user_message=assistant_msg, conversation=full_ctx)
+            except Exception as exc:
+                logger.debug("notify_session_end _op_auto(assistant) failed (non-critical): %s", exc)
+
+        if user_msg or assistant_msg:
+            try:
+                await self._callback_engine.on_exchange(
+                    user_msg=user_msg,
+                    assistant_msg=assistant_msg,
+                    conversation=conversation,
+                )
+            except Exception as exc:
+                logger.debug("notify_session_end on_exchange failed (non-critical): %s", exc)
+
+        try:
+            await self._callback_engine.on_session_end(conversation=conversation)
+        except Exception as exc:
+            logger.debug("notify_session_end on_session_end failed (non-critical): %s", exc)
+
     async def _op_forget(self, memory_id: Optional[str] = None, content_match: Optional[str] = None) -> Dict[str, Any]:
         if not memory_id and not content_match:
             return {"success": False, "error": "Provide memory_id or content_match"}
@@ -1043,22 +1090,7 @@ Respond with JSON only:
         if not memory_id and not content_match:
             return {"success": False, "error": "Provide memory_id or content_match to locate the memory"}
 
-        target_id = memory_id
-        original_content: Optional[str] = None
-        if not target_id and content_match:
-            candidates = await self._api.recall(query=content_match, limit=8)
-            match_words = set(re.findall(r"\b\w{4,}\b", content_match.lower()))
-            for mem in candidates:
-                mem_words = set(re.findall(r"\b\w{4,}\b", (mem.get("content") or "").lower()))
-                union = len(match_words | mem_words)
-                if match_words and union and len(match_words & mem_words) / union > 0.35:
-                    target_id = mem.get("_id") or mem.get("id")
-                    original_content = mem.get("content")
-                    break
-
-        if not target_id:
-            return {"success": False, "error": f"No memory matched '{(content_match or '')[:80]}' — nothing updated"}
-
+        # Evaluate the new content for importance/type/tags
         eval_result = await self._evaluate_importance(new_content, type_hint, [])
         new_importance = float(eval_result.get("importance") or 0)
         summary = eval_result.get("summary") or new_content[:300]
@@ -1072,24 +1104,47 @@ Respond with JSON only:
             "content": summary,
             "type": inferred_type,
             "scope": memory_scope,
-            "importance_score": new_importance,
+            "importance_score": max(new_importance, 0.5),
             "scores": api_scores,
             "tags": tags,
             "last_accessed_at": datetime.utcnow().isoformat() + "Z",
         }
 
-        logger.info("🧠 [Memory API] PATCH (update) %s | old: %s | new: %s | importance: %.4f", target_id, (original_content or "?")[:60], summary[:60], new_importance)
-        success = await self._safe_patch(target_id, patch_payload)
+        # Path A: direct ID patch
+        if memory_id:
+            success = await self._safe_patch(memory_id, patch_payload)
+            return {"success": success, "memory_id": memory_id if success else None}
 
-        return {
-            "success": success,
-            "memory_id": target_id,
-            "original_content": original_content,
-            "updated_content": summary,
-            "importance_score": new_importance,
-            "type": inferred_type,
-            "scope": memory_scope,
-        }
+        # Path B: atomic semantic update via API (new endpoint)
+        api_result = await self._api.update(
+            query=content_match,
+            new_content=summary,
+            threshold=0.35,
+            mem_type=inferred_type if inferred_type != "fact" else None,
+            importance_score=max(new_importance, 0.5),
+        )
+        if api_result.get("success"):
+            logger.info("🧠 [Memory] Updated via API atomic update: query='%s'", content_match)
+            return api_result
+
+        # Path C: fallback — recall + word-overlap match + patch
+        logger.debug("🧠 [Memory] API update failed (%s), falling back to recall+patch", api_result.get("error"))
+        candidates = await self._api.recall(query=content_match, limit=8)
+        target_id = None
+        query_words = set(re.findall(r"\b\w{3,}\b", content_match.lower()))
+        for mem in candidates:
+            mem_words = set(re.findall(r"\b\w{3,}\b", (mem.get("content") or "").lower()))
+            if query_words & mem_words:
+                target_id = mem.get("_id") or mem.get("id")
+                break
+        if not target_id and candidates and len(query_words) <= 2:
+            target_id = candidates[0].get("_id") or candidates[0].get("id")
+
+        if not target_id:
+            return {"success": False, "error": f"No memory matched '{(content_match or '')[:80]}' — nothing updated"}
+
+        success = await self._safe_patch(target_id, patch_payload)
+        return {"success": success, "memory_id": target_id if success else None}
 
     async def _op_reflect(self) -> Dict[str, Any]:
         import asyncio

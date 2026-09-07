@@ -4,6 +4,7 @@
   "type": "python_tool_agent",
   "display_name": "AI Writer",
   "description": "Generate high-quality business communication (emails, messages, reports, documents) quickly and professionally from user prompts and available context.",
+  "icon": "ai_writer.svg",
   "entrypoint": "entrypoint.py",
   "auto_attach_to_all_agents": true
 }

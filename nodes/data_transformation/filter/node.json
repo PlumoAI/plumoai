@@ -1,0 +1,20 @@
+{
+  "node_id": "data_transformation.filter",
+  "category": "Data Transformation",
+  "display_name": "Filter",
+  "description": "Keep only the items of the incoming list that match one or more field conditions.",
+  "icon": "filter.svg",
+  "entrypoint": "entrypoint.py",
+  "config": {
+    "outputPorts": [{ "portId": "output", "portName": "Output" }],
+    "requiresRawInput": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "conditions": { "type": "if_else_node_conditions" }
+      },
+      "required": ["conditions"],
+      "additionalProperties": false
+    }
+  }
+}

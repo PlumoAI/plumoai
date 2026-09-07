@@ -2,17 +2,16 @@
   "name": "Notion",
   "code": "notion",
   "auth_type": "oauth2",
-  "required_fields": [
-    { "key": "client_id", "type": "text", "label": "Client ID" },
-    { "key": "client_secret", "type": "text", "label": "Client Secret" }
-  ],
+  "required_fields": [],
   "config": {
-    "authorization_endpoint": "https://api.notion.com/v1/oauth/authorize",
-    "token_endpoint": "https://api.notion.com/v1/oauth/token",
-    "response_type": "code",
-    "owner": "user",
-    "grant_types": ["authorization_code"],
-    "is_client_registration_required": false
+    "authorization_endpoint": "https://mcp.notion.com/authorize",
+    "resource": "https://mcp.notion.com/",
+    "token_endpoint": "https://mcp.notion.com/token",
+    "grantTypes": ["authorization_code", "refresh_token"],
+    "registration_endpoint": "https://mcp.notion.com/register",
+    "isClientRegistrationRequired": true
   },
-  "icon": "./notion.svg"
+  "icon": "notion.svg",
+  "is_active": true
 }
+

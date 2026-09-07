@@ -1,0 +1,11 @@
+{
+  "name": "GetLeads.io",
+  "code": "getleads",
+  "auth_type": "api_key",
+  "icon": "getleads.svg",
+  "required_fields": [
+    { "key": "api_key", "type": "password", "label": "API Key" }
+  ],
+  "config": null,
+  "is_active": true
+}

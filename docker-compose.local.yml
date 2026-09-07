@@ -3,7 +3,9 @@
 #
 # Routing (entrypoint web = port 80 → exposed as LOCALHOST_PORT, default 7861):
 #   /api/auth/*    → auth-service:3000 (priority 200; never send /api to main-app)
-#   /api/company/* → api-service:3001 (priority 100)
+#   /api/company/* → plumoai-api:8080 (priority 100; company-api side, prefix stripped)
+#   /api/v1/*      → plumoai-api:8080 (priority 150; public-api side, prefix kept)
+#   /api/websocket/* → plumoai-api:8080 (priority 175; websocket-api side, stripped to /ws/*)
 #   /*             → main-app (priority 1, fallback for non-API only)
 #
 # Traefik starts with the stack and listens on LOCALHOST_PORT immediately.
@@ -17,6 +19,11 @@ services:
     command:
       - "--api.insecure=true"
       - "--providers.docker=true"
+      # Compose overlay files replace the whole command list, not merge it — this flag
+      # has to be repeated here or Traefik silently falls back to dialing
+      # /var/run/docker.sock directly, which isn't mounted (see main docker-compose.yml
+      # Traefik comment for why the socket goes through docker-socket-proxy instead).
+      - "--providers.docker.endpoint=tcp://docker-socket-proxy:2375"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.allowEmptyServices=true"
       # If a backend (e.g. company) doesn't send response headers in time, return 504 instead of buffering forever
@@ -70,23 +77,30 @@ services:
   ai:
     platform: linux/amd64
 
-  company:
+  # plumoai-api now runs company-api, public-api, and websocket-api (single container, nginx on :8080)
+  plumoai-api:
     labels:
       - "traefik.enable=true"
+
       - "traefik.http.routers.api-http.rule=PathPrefix(`/api/company`)"
       - "traefik.http.routers.api-http.entrypoints=web"
       - "traefik.http.routers.api-http.priority=100"
       - "traefik.http.routers.api-http.service=api"
-      - "traefik.http.services.api.loadbalancer.server.port=3001"
+      - "traefik.http.services.api.loadbalancer.server.port=8080"
       - "traefik.http.middlewares.api-strip.stripprefix.prefixes=/api/company"
       - "traefik.http.routers.api-http.middlewares=api-strip,sec-headers,ratelimit"
 
-  plumoai-api:
-    labels:
-      - "traefik.enable=true"
       - "traefik.http.routers.plumoai-public-api-http.rule=PathPrefix(`/api/v1`)"
       - "traefik.http.routers.plumoai-public-api-http.entrypoints=web"
       - "traefik.http.routers.plumoai-public-api-http.priority=150"
       - "traefik.http.routers.plumoai-public-api-http.service=plumoai-public-api"
-      - "traefik.http.services.plumoai-public-api.loadbalancer.server.port=3010"
+      - "traefik.http.services.plumoai-public-api.loadbalancer.server.port=8080"
       - "traefik.http.routers.plumoai-public-api-http.middlewares=sec-headers,ratelimit"
+
+      - "traefik.http.routers.plumoai-websocket-api-http.rule=PathPrefix(`/api/websocket`)"
+      - "traefik.http.routers.plumoai-websocket-api-http.entrypoints=web"
+      - "traefik.http.routers.plumoai-websocket-api-http.priority=175"
+      - "traefik.http.routers.plumoai-websocket-api-http.service=plumoai-websocket-api"
+      - "traefik.http.services.plumoai-websocket-api.loadbalancer.server.port=8080"
+      - "traefik.http.middlewares.websocket-strip.stripprefix.prefixes=/api/websocket"
+      - "traefik.http.routers.plumoai-websocket-api-http.middlewares=websocket-strip,sec-headers,ratelimit"

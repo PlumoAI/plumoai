@@ -1,9 +1,61 @@
 services:
+  # ------------------- Docker socket proxy -------------------
+  # Traefik needs to read container labels to build its routing config, but it doesn't
+  # need the full Docker API. This proxy holds the real socket and exposes only the
+  # read-only paths Traefik's docker provider actually calls (container list/inspect,
+  # network inspect, the events stream for live updates), with no write methods allowed
+  # at all — so a compromised Traefik container can't use the socket to escalate into
+  # full Docker control on the host.
+  #
+  # tecnativa/docker-socket-proxy is NOT used here: its proxy denies every request that
+  # isn't GET or POST, including the HEAD /_ping handshake Traefik >=3.6.1 sends first —
+  # that HEAD gets denied, Traefik silently falls back to a stale Docker API version, its
+  # docker provider then discovers zero routers, and every request 404s ("page not
+  # found" is Traefik's own fallback response when nothing matches). wollomatic/socket-proxy
+  # explicitly supports allowing that HEAD request.
+  docker-socket-proxy:
+    image: wollomatic/socket-proxy:1
+    container_name: docker-socket-proxy
+    restart: unless-stopped
+    # The image defaults to USER 65534:65534 (nobody), which can't read a root-owned
+    # docker.sock. The project's own docs work around that with a host-specific docker
+    # group GID, but that GID varies per host (and doesn't apply the same way on Docker
+    # Desktop) — not something a self-hosted installer can discover reliably across
+    # arbitrary machines. Running as root matches the socket's owning uid everywhere,
+    # no host-specific lookup needed. cap_drop + no-new-privileges below still hold, so
+    # this isn't the same exposure as the old direct-mount-into-Traefik setup.
+    user: "0:0"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges
+    command:
+      - "-loglevel=info"
+      - "-listenip=0.0.0.0"
+      - "-proxyport=2375"
+      - "-allowfrom=traefik"
+      - "-allowGET=/v[0-9.]+/(version|containers/.*|networks.*|events.*)"
+      - "-allowHEAD=/_ping"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits: { memory: 64M }
+        reservations: { memory: 16M }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
   # ------------------- Traefik (Reverse Proxy) -------------------
   traefik:
     image: traefik:v3.6
     container_name: traefik
     restart: always
+    depends_on:
+      - docker-socket-proxy
     deploy:
       resources:
         limits: { memory: 256M }
@@ -16,6 +68,7 @@ services:
     command:
       - "--api.insecure=false"
       - "--providers.docker=true"
+      - "--providers.docker.endpoint=tcp://docker-socket-proxy:2375"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.allowEmptyServices=true"
       - "--serversTransport.forwardingTimeouts.responseHeaderTimeout=0"
@@ -30,19 +83,21 @@ services:
       - "--certificatesresolvers.mytlschallenge.acme.tlschallenge=true"
       - "--certificatesresolvers.mytlschallenge.acme.email=${SSL_EMAIL}"
       - "--certificatesresolvers.mytlschallenge.acme.storage=/letsencrypt/acme.json"
+      # Defaults to Let's Encrypt production. Set ACME_CASERVER in .env to the LE staging
+      # directory when reinstalling/testing often, to avoid hitting production rate limits.
+      - "--certificatesresolvers.mytlschallenge.acme.caserver=${ACME_CASERVER:-https://acme-v02.api.letsencrypt.org/directory}"
     ports:
       - "0.0.0.0:80:80"
       - "0.0.0.0:443:443"
     volumes:
       - traefik_data:/letsencrypt
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - frontend
       - internal
 
   # Main app → https://self.plumoai.com (DOMAIN_NAME) — low priority so /api/* goes to auth/company
   main-app:
-    image: plumoai/plumoai-app:${PLUMOAI_VERSION:-v1.0.1}
+    image: plumoai/plumoai-app:${PLUMOAI_VERSION:-v1.0.4}
     container_name: main-app
     restart: unless-stopped
     healthcheck:
@@ -82,7 +137,7 @@ services:
   # internal = reach MySQL (hostname "mysql"); frontend = outbound internet (e.g. api.plumoai.com)
   # Secrets are mounted read-only at /run/secrets/<name>.
   auth:
-    image: plumoai/authservice:${PLUMOAI_VERSION:-v1.0.1}
+    image: plumoai/authservice:${PLUMOAI_VERSION:-v1.0.4}
     container_name: auth-service
     restart: unless-stopped
     depends_on:
@@ -115,6 +170,9 @@ services:
       - ./service-providers:/opt/plumoai/service-providers:ro
     environment:
       SERVICE_PROVIDERS_LOCAL_PATH: /opt/plumoai/service-providers
+      # Public base URL of this app (e.g. http://localhost:7861 or https://your-domain.com),
+      # used to build absolute links back to the app (e.g. email verification/reset links).
+      APP_HOST: ${APP_HOST}
       NODE_ENV: production   # enables V8 opts, disables dev middleware, reduces CPU/RAM
       # One reverse proxy (Traefik) in front → Express/Nest req.ip / forwarded headers
       TRUST_PROXY: ${TRUST_PROXY:-1}
@@ -136,6 +194,7 @@ services:
       - mysql_db
       - mysql_user
       - mysql_password
+      - app_secret
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.auth.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/api/auth`)"
@@ -147,10 +206,16 @@ services:
       - "traefik.http.middlewares.auth-strip.stripprefix.prefixes=/api/auth"
       - "traefik.http.routers.auth.middlewares=auth-strip,sec-headers,ratelimit"
 
-  # ------------------- Company Service -------------------
-  company:
-    image: plumoai/api-service:${PLUMOAI_VERSION:-v1.0.1}
-    container_name: api-service
+  # ------------------- PlumoAI API (company-api + public-api + websocket-api, single container) -------------------
+  # Was three containers behind separate Traefik routers. Now one image
+  # (plumoai/plumoai-api) runs all three apps + an internal nginx on :8080,
+  # routed by path prefix. Traefik's existing routing still works unmodified:
+  #   /api/company/* -> stripped by Traefik  -> nginx "/" catch-all       -> company-api
+  #   /api/v1/*      -> kept by Traefik      -> nginx "/api/" location    -> public-api
+  #   /ws/*          -> kept by Traefik      -> nginx "/ws/" location     -> websocket-api (WebSocket upgrade)
+  plumoai-api:
+    image: plumoai/plumoai-api:${PLUMOAI_VERSION:-v1.0.4}
+    container_name: plumoai-api
     restart: unless-stopped
     depends_on:
       mysql:
@@ -158,9 +223,9 @@ services:
       mongodb:
         condition: service_healthy
     healthcheck:
-      # Image has no curl; use Node to check port 3001.
+      # Image has no curl; use Node to check nginx (port 8080) -> company-api's /health.
       # interval 30s to avoid cold-starting Node every 15s (CPU spike).
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001/', r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:8080/health', r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))\""]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -168,34 +233,39 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
-          cpus: "0.75"      # company handles DB + S3 + AI calls; slightly more headroom
+          memory: 1G       # hosts company-api + public-api + websocket-api + nginx in one container
+          cpus: "1.0"
         reservations:
-          memory: 128M
-          cpus: "0.10"
+          memory: 256M
+          cpus: "0.15"
     networks:
       - frontend
       - internal
+    ports:
+      # Host access: http://localhost:3010/api/v1/... (direct to public-api, bypassing nginx/Traefik — same as before)
+      - "3010:3010"
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
     volumes:
       - ./ai-agents:/opt/plumoai/ai-agents:ro
       - ./storage:/opt/plumoai/storage
+      - ./ai-employees:/opt/plumoai/ai-employees
     environment:
+      # ---- company-api ----
       PLUMOAI_AI_AGENTS_APPS_PATH: /opt/plumoai/ai-agents
       LOCAL_STORAGE_PATH: /opt/plumoai/storage
+      AI_EMPLOYEES_PATH: /opt/plumoai/ai-employees
       NODE_ENV: production
+      APP_HOST: ${APP_HOST}
       # One reverse proxy (Traefik) in front → Express/Nest req.ip / forwarded headers
       TRUST_PROXY: ${TRUST_PROXY:-1}
-      PORT: ${PORT:-3001}
       DB_HOST: ${DB_HOST:-mysql}
       DB_PORT: ${DB_PORT:-3306}
       MONGODB_HOST: ${MONGODB_HOST:-mongodb}
       MONGODB_PORT: ${MONGODB_PORT:-27017}
       Auth_URL: ${Auth_URL:-http://auth:3000}
       PLUMOAI_DIGITAL_EMPLOYEE_API_URL: ${PLUMOAI_DIGITAL_EMPLOYEE_API_URL:-http://ai:3002}
-      MILVUS_URL: "http://milvus-standalone:19530"
       # OpenAI key used by the company/api service for knowledgebase embeddings (optional)
       OPENAI_API_KEY_KNOWLEDGEBASE: ${OPENAI_API_KEY_KNOWLEDGEBASE:-}
       STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
@@ -203,6 +273,26 @@ services:
       AWS_REGION: ${AWS_REGION}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      LOG_LEVEL: info
+      # company-api calls public-api's /internal/v1/* (e.g. records/convert-ids) —
+      # same container now, so loopback on public-api's own port (:3010).
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3010}
+      # ---- public-api ----
+      AUTH_API_BASE_URL: ${AUTH_API_BASE_URL:-http://auth:3000}
+      # company-api is now the SAME container (loopback on :3001), not a separate "company" host
+      COMPANY_API_BASE_URL: ${COMPANY_API_BASE_URL:-http://localhost:3001}
+      # No fallback on purpose: installers generate a random per-deployment key into
+      # secrets/app_secret.txt (same pattern as the DB passwords) and copy it into .env
+      # here. An unset value is a misconfiguration, not something to paper over with a
+      # shared default.
+      ENCRYPTION_KEY: ${PLUMOAI_PUBLIC_API_ENCRYPTION_KEY:?PLUMOAI_PUBLIC_API_ENCRYPTION_KEY is not set — run install.sh/install.ps1, or set it in .env}
+      # ---- websocket-api ----
+      # AI employee workflow execution events call the ai service directly (same URL
+      # company-api uses above); Auth_URL is already set for the whole container.
+      PROJECT_AI_ASSISTANT_API_URL: ${PROJECT_AI_ASSISTANT_API_URL:-http://ai:3002}
+      # Stored-procedure calls (project/document saves) go to company-api, now the
+      # SAME container (loopback), not a separate host.
+      PLUMO_API_BASE_URL: ${PLUMO_API_BASE_URL:-http://localhost:3001}
     secrets:
       - mysql_db
       - mysql_user
@@ -212,42 +302,40 @@ services:
       - mongo_password
     labels:
       - "traefik.enable=true"
+
+      # company-api routes: /api/company/* (Traefik strips the prefix before forwarding)
       - "traefik.http.routers.api.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/api/company`)"
       - "traefik.http.routers.api.entrypoints=websecure"
       - "traefik.http.routers.api.tls.certresolver=mytlschallenge"
       - "traefik.http.routers.api.priority=100"
-      - "traefik.http.services.api.loadbalancer.server.port=3001"
+      - "traefik.http.routers.api.service=api"
+      - "traefik.http.services.api.loadbalancer.server.port=8080"
       - "traefik.http.middlewares.api-strip.stripprefix.prefixes=/api/company"
       - "traefik.http.routers.api.middlewares=api-strip,sec-headers,ratelimit"
 
-
-  plumoai-api:
-    image: plumoai/plumoai-public-api:latest
-    container_name: plumoai-api
-    restart: unless-stopped
-    ports:
-      # Host access: http://localhost:3010/api/v1/... (maps to container port 3010)
-      - "3010:3010"
-    environment:
-      PORT: "3010"
-      AUTH_API_BASE_URL: ${AUTH_API_BASE_URL:-http://auth:3000}
-      COMPANY_API_BASE_URL: ${COMPANY_API_BASE_URL:-http://company:3001}
-      ENCRYPTION_KEY: ${PLUMOAI_PUBLIC_API_ENCRYPTION_KEY:-PlumoAi@7861}
-    networks:
-      - internal
-      - frontend
-    labels:
-      - "traefik.enable=true"
-      # Public API: keep the /api/v1 prefix when forwarding to the backend (no stripPrefix).
-      # Use distinct router/service names to avoid clashing with the existing `api` router/service
-      # used by the company service.
+      # public-api routes: /api/v1/* (prefix kept, forwarded as-is)
       - "traefik.http.routers.plumoai-public-api.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/api/v1`)"
       - "traefik.http.routers.plumoai-public-api.entrypoints=websecure"
       - "traefik.http.routers.plumoai-public-api.tls.certresolver=mytlschallenge"
       - "traefik.http.routers.plumoai-public-api.priority=150"
       - "traefik.http.routers.plumoai-public-api.service=plumoai-public-api"
-      - "traefik.http.services.plumoai-public-api.loadbalancer.server.port=3010"
+      - "traefik.http.services.plumoai-public-api.loadbalancer.server.port=8080"
       - "traefik.http.routers.plumoai-public-api.middlewares=sec-headers,ratelimit"
+
+      # websocket-api routes: external /api/websocket/* -> stripped to /* -> nginx's
+      # existing /ws/ location, so clients hit /api/websocket/ws/doc,
+      # /api/websocket/ws/project, /api/websocket/ws/ai_employee/workflow/execution.
+      # Its /internal/* HTTP routes are deliberately NOT exposed here — they're
+      # same-server-only (see websocket-api's internal-auth.middleware.ts),
+      # reachable only from inside the Docker network.
+      - "traefik.http.routers.plumoai-websocket-api.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/api/websocket`)"
+      - "traefik.http.routers.plumoai-websocket-api.entrypoints=websecure"
+      - "traefik.http.routers.plumoai-websocket-api.tls.certresolver=mytlschallenge"
+      - "traefik.http.routers.plumoai-websocket-api.priority=175"
+      - "traefik.http.routers.plumoai-websocket-api.service=plumoai-websocket-api"
+      - "traefik.http.services.plumoai-websocket-api.loadbalancer.server.port=8080"
+      - "traefik.http.middlewares.websocket-strip.stripprefix.prefixes=/api/websocket"
+      - "traefik.http.routers.plumoai-websocket-api.middlewares=websocket-strip,sec-headers,ratelimit"
 
   # ------------------- AI Service (internal only — no exposed URL) -------------------
   # Other services call it by hostname: http://ai:<port> (e.g. http://ai:3000)
@@ -255,7 +343,7 @@ services:
   # On native AMD64 hosts this is a no-op. Requires QEMU binfmt_misc on ARM hosts:
   #   docker run --privileged --rm tonistiigi/binfmt --install all
   ai:
-    image: plumoai/ai-service:${PLUMOAI_VERSION:-v1.0.1}
+    image: plumoai/ai-service:${PLUMOAI_VERSION:-v1.0.4}
     platform: linux/amd64
     container_name: ai-service
     restart: unless-stopped
@@ -272,13 +360,32 @@ services:
         reservations: { memory: 256M }
     volumes:
       # Writable so stdio MCP servers (e.g. plumoai-mcp) can run `npm ci` at runtime when needed.
-      - ./ai-agents:/opt/plumoai/app_agents
+      - ./ai-agents:/opt/plumoai/ai_agents
+      - ./nodes:/opt/plumoai/nodes
+      - ./service-providers:/opt/plumoai/service-providers:ro
     environment:
-      PLUMOAI_APP_AGENTS_EXTERNAL_DIR: /opt/plumoai/app_agents
+      PLUMOAI_AI_AGENTS_EXTERNAL_DIR: /opt/plumoai/ai_agents
+      PLUMOAI_NODES_EXTERNAL_DIR: /opt/plumoai/nodes
+      PLUMOAI_SERVICE_PROVIDERS_EXTERNAL_DIR: /opt/plumoai/service-providers
       AUTH_URL: ${AUTH_URL:-http://auth:3000}
-      COMPANY_URL: ${COMPANY_URL:-http://company:3001}
+      # company-api now lives in the merged plumoai-api container (was its own "company" host)
+      COMPANY_URL: ${COMPANY_URL:-http://plumoai-api:3001}
+      # websocket-api's /internal/* HTTP endpoints only accept same-server callers
+      # (TCP peer 127.0.0.1/::1 — see internal-auth.middleware.ts, no token check).
+      # A direct call from this container's own IP would get 403'd, so this MUST
+      # go through nginx on :8080 (same container as websocket-api, loopback to
+      # it) rather than websocket-api's own port 2999 directly.
+      WEBSOCKET_URL: ${WEBSOCKET_URL:-http://plumoai-api:8080}
       PORT: ${PORT:-3002}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      AGENT_VERSION: v2
+      # Default LLM configuration — if AI_PROVIDER is unset/invalid, the AI service
+      # auto-picks whichever provider below actually has a key configured.
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
     networks:
       - internal   # talk to auth/company/db services
       - frontend   # reach external APIs (OpenRouter, OpenAI, etc.)
@@ -378,100 +485,6 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ------------------- Milvus (Vector DB, standalone) -------------------
-  # Internal-only: other services can reach it at milvus:19530
-  milvus-etcd:
-    image: quay.io/coreos/etcd:v3.5.25
-    container_name: milvus-etcd
-    restart: unless-stopped
-    environment:
-      ETCD_AUTO_COMPACTION_MODE: revision
-      ETCD_AUTO_COMPACTION_RETENTION: "1000"
-      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
-      ETCD_SNAPSHOT_COUNT: "50000"
-    command:
-      - etcd
-      - -advertise-client-urls=http://milvus-etcd:2379
-      - -listen-client-urls
-      - http://0.0.0.0:2379
-      - --data-dir
-      - /etcd
-    volumes:
-      - milvus_etcd_data:/etcd
-    healthcheck:
-      test: ["CMD", "etcdctl", "endpoint", "health"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-    networks:
-      - internal
-    deploy:
-      resources:
-        limits: { memory: 512M }
-        reservations: { memory: 128M }
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "3" }
-
-  milvus-minio:
-    image: minio/minio:RELEASE.2024-05-28T17-19-04Z
-    container_name: milvus-minio
-    restart: unless-stopped
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    command: ["minio", "server", "/minio_data", "--console-address", ":9001"]
-    volumes:
-      - milvus_minio_data:/minio_data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-    networks:
-      - internal
-    deploy:
-      resources:
-        limits: { memory: 1G }
-        reservations: { memory: 256M }
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "3" }
-
-  milvus:
-    image: milvusdb/milvus:v2.6.14
-    container_name: milvus-standalone
-    restart: unless-stopped
-    command: ["milvus", "run", "standalone"]
-    security_opt:
-      - seccomp:unconfined
-    depends_on:
-      milvus-etcd:
-        condition: service_healthy
-      milvus-minio:
-        condition: service_healthy
-    environment:
-      MINIO_REGION: us-east-1
-      ETCD_ENDPOINTS: milvus-etcd:2379
-      MINIO_ADDRESS: milvus-minio:9000
-    volumes:
-      - milvus_data:/var/lib/milvus
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
-      interval: 30s
-      start_period: 90s
-      timeout: 20s
-      retries: 3
-    networks:
-      - internal
-    deploy:
-      resources:
-        limits: { memory: 2G }
-        reservations: { memory: 512M }
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "3" }
-
 # ------------------- Networks -------------------
 # frontend: normal network so Traefik gets host port bindings (80, 443)
 # internal: isolated (no outbound); backends + Traefik for backend access
@@ -485,9 +498,6 @@ volumes:
   traefik_data:
   mysql_data:
   mongo_data:
-  milvus_etcd_data:
-  milvus_minio_data:
-  milvus_data:
 
 # ------------------- Secrets -------------------
 secrets:
@@ -505,3 +515,5 @@ secrets:
     file: ./secrets/mongo_user.txt
   mongo_password:
     file: ./secrets/mongo_password.txt
+  app_secret:
+    file: ./secrets/app_secret.txt

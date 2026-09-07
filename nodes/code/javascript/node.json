@@ -1,0 +1,30 @@
+{
+  "node_id": "code.javascript",
+  "category": "Code",
+  "display_name": "JavaScript",
+  "description": "Run custom JavaScript against the incoming items to transform, filter, or generate data.",
+  "icon": "javascript.svg",
+  "entrypoint": "entrypoint.py",
+  "config": {
+    "outputPorts": [{ "portId": "output", "portName": "Output" }],
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["runOnceForAllItems", "runOnceForEachItem"],
+          "default": "runOnceForAllItems",
+          "description": "\"runOnceForAllItems\": code runs once with access to all incoming items via $input.all(); return an array of objects, one per output item. \"runOnceForEachItem\": code runs once per incoming item with $json/item bound to that item; return a single object, or null/false to drop the item."
+        },
+        "code": {
+          "type": "code_editor",
+          "language": "javascript",
+          "default": "// Returns the previous node's items unchanged.\nreturn $input.all();",
+          "description": "JavaScript source. Available globals: $input.all() / $input.item / $input.first() / $input.last(), $json (current item's data), $('nodeId').item.json / $('nodeId').all(), $now."
+        }
+      },
+      "required": ["code"],
+      "additionalProperties": false
+    }
+  }
+}

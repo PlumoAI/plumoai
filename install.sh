@@ -24,9 +24,11 @@ plumo_install_banner() {
 plumo_install_banner
 
 FRESH=false
+SKIP_BACKUP=false
 for arg in "$@"; do
   case "$arg" in
     --fresh|-Fresh) FRESH=true ;;
+    --no-backup) SKIP_BACKUP=true ;;
   esac
 done
 
@@ -186,6 +188,14 @@ if [ "$RUN_MODE" != "localhost" ]; then
   fi
 fi
 
+# Public base URL of the app (e.g. auth uses this to build email verification/reset links).
+if [ "$RUN_MODE" = "localhost" ]; then
+  APP_HOST="http://localhost:${LOCALHOST_PORT}"
+else
+  APP_HOST="https://${DOMAIN_NAME}"
+fi
+set_env_key APP_HOST "$APP_HOST"
+
 email_provider_needs_prompt() {
   local p="$1"
   [[ -z "$p" || "$p" == *"<"* ]]
@@ -297,6 +307,43 @@ if openai_kb_key_needs_prompt "$OPENAI_API_KEY_KNOWLEDGEBASE" && [ -t 0 ]; then
   fi
 fi
 
+ai_provider_needs_prompt() {
+  local v="$1"
+  [[ -z "$v" || "$v" == *"<"* ]]
+}
+
+AI_PROVIDER=$(get_env_value AI_PROVIDER)
+
+# Optional: default LLM provider/model for the AI service (voice/knowledgebase agents).
+# If skipped, the AI service auto-picks whichever provider below actually has a key configured.
+if [ -t 0 ] && ai_provider_needs_prompt "$AI_PROVIDER"; then
+  echo ""
+  echo "Default LLM Provider:"
+  echo "  1) OpenRouter (default)"
+  echo "  2) OpenAI"
+  echo "  3) Skip for now (auto-picks whichever key below is set; edit .env later)"
+  read -r -p "Choose [1/2/3] (Enter = 1): " llm_choice
+  case "${llm_choice:-1}" in
+    2)
+      set_env_key AI_PROVIDER "openai"
+      read -r -p "OPENAI_API_KEY: " oa_key
+      [[ -n "$oa_key" ]] && set_env_key OPENAI_API_KEY "$oa_key"
+      read -r -p "OPENAI_MODEL [gpt-4o-mini]: " oa_model
+      set_env_key OPENAI_MODEL "${oa_model:-gpt-4o-mini}"
+      ;;
+    3)
+      : # leave AI_PROVIDER unset; AI service auto-detects from whichever key is present
+      ;;
+    *)
+      set_env_key AI_PROVIDER "openrouter"
+      read -r -p "OPENROUTER_API_KEY: " or_key
+      [[ -n "$or_key" ]] && set_env_key OPENROUTER_API_KEY "$or_key"
+      read -r -p "OPENROUTER_MODEL [openai/gpt-4o-mini]: " or_model
+      set_env_key OPENROUTER_MODEL "${or_model:-openai/gpt-4o-mini}"
+      ;;
+  esac
+fi
+
 if [ -t 0 ] && storage_backend_needs_prompt "$STORAGE_BACKEND"; then
   echo ""
   echo "File storage (company service uploads):"
@@ -373,6 +420,19 @@ else
   echo "  Keeping existing mongo_password"
 fi
 
+# app_secret: backs PLUMOAI_PUBLIC_API_ENCRYPTION_KEY. Kept as a secrets/*.txt file (same
+# as the DB passwords above) rather than only in .env, so it's covered by the same
+# chmod 600 and isn't the only credential missing from a `secrets/` backup. 37 lowercase
+# alnum chars — long enough to be a real secret, not just matching the old hardcoded
+# default's short length.
+if [ ! -f secrets/app_secret.txt ]; then
+  openssl rand -base64 96 | tr -dc 'a-z0-9' | head -c 37 > secrets/app_secret.txt
+  echo "  Created new app_secret"
+else
+  echo "  Keeping existing app_secret"
+fi
+set_env_key PLUMOAI_PUBLIC_API_ENCRYPTION_KEY "$(cat secrets/app_secret.txt)"
+
 chmod 600 secrets/* 2>/dev/null || true
 [ -f scripts/mongo-secrets-entrypoint.sh ] && chmod +x scripts/mongo-secrets-entrypoint.sh
 [ -f scripts/init-mongo-user.sh ] && chmod +x scripts/init-mongo-user.sh
@@ -401,6 +461,18 @@ PS_HINT="$COMPOSE_BIN $ENV_ARGS -f docker-compose.yml"
 
 echo "Starting services..."
 if [ "$FRESH" = true ]; then
+  if [ "$SKIP_BACKUP" = true ]; then
+    echo "  Fresh install: --no-backup passed, skipping backup before data loss."
+  elif $COMPOSE_BIN $ENV_ARGS $COMPOSE_FILES ps --status running mysql 2>/dev/null | grep -q mysql; then
+    echo "  Fresh install: backing up existing data first (this deletes the MySQL volume)..."
+    if ! ./scripts/backup.sh "backups/pre-fresh-$(date +%Y%m%d-%H%M%S)"; then
+      echo "Error: backup failed. Aborting --fresh so no data is lost." >&2
+      echo "  Re-run with --fresh --no-backup to skip the backup and proceed anyway." >&2
+      exit 1
+    fi
+  else
+    echo "  Fresh install: no running MySQL found, nothing to back up."
+  fi
   echo "  Fresh install: stopping existing stack..."
   if ! $COMPOSE_BIN $ENV_ARGS $COMPOSE_FILES down --remove-orphans --timeout 20 2>/dev/null; then
     echo "Error: failed to stop existing services (fresh mode)." >&2
@@ -416,6 +488,16 @@ if ! $COMPOSE_BIN $ENV_ARGS $COMPOSE_FILES up -d --remove-orphans; then
   echo "Error: failed to start services. Run '$PS_HINT' for details." >&2
   exit 1
 fi
+
+echo "  Installing plumoai-mcp dependencies in ai-service (if present)..."
+if ! $COMPOSE_BIN $ENV_ARGS $COMPOSE_FILES exec -T ai sh -c 'if [ -d /opt/plumoai/ai_agents/plumoai/plumoai-mcp ]; then cd /opt/plumoai/ai_agents/plumoai/plumoai-mcp && npm i; else echo plumoai-mcp not present, skipping npm i; fi'; then
+  echo "Warning: npm i in plumoai-mcp failed (non-fatal, plumoai MCP agent may not work)." >&2
+fi
+
+echo ""
+echo "Image versions running (tags are mutable — record these digests if you need to prove"
+echo "exactly what was deployed, or to pin them later via docker-compose.override.yml):"
+$COMPOSE_BIN $ENV_ARGS $COMPOSE_FILES images 2>/dev/null || true
 
 echo ""
 if [ "$RUN_MODE" = "localhost" ]; then

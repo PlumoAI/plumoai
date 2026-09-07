@@ -141,22 +141,33 @@ MULTI-STEP: operation="multi_step", steps: [{"operation":"current_datetime"}, {"
 
     async def _llm_generate(self, prompt: str, max_tokens: int = 800) -> Optional[str]:
         """Call LLM and return single string output. Used to interpret natural language into structured params."""
-        if not self.llm_provider or not hasattr(self.llm_provider, "generate"):
+        if not self.llm_provider:
             return None
         try:
-            gen = self.llm_provider.generate(prompt, max_tokens=max_tokens)
-            if gen is None:
-                return None
-            if hasattr(gen, "__aiter__"):
-                out = ""
-                async for chunk in gen:
-                    if isinstance(chunk, dict) and "text" in chunk:
-                        out += chunk.get("text", "")
-                    elif isinstance(chunk, str):
-                        out += chunk
-                return out.strip() or None
-            if isinstance(gen, str):
-                return gen.strip() or None
+            # Prefer get_response (standard provider interface); fall back to generate if present
+            if hasattr(self.llm_provider, "get_response"):
+                result = await self.llm_provider.get_response(prompt, max_tokens=max_tokens)
+                if result is None:
+                    return None
+                if isinstance(result, str):
+                    return result.strip() or None
+                if isinstance(result, dict):
+                    return (result.get("text") or result.get("content") or result.get("response") or "").strip() or None
+                return str(result).strip() or None
+            if hasattr(self.llm_provider, "generate"):
+                gen = self.llm_provider.generate(prompt, max_tokens=max_tokens)
+                if gen is None:
+                    return None
+                if hasattr(gen, "__aiter__"):
+                    out = ""
+                    async for chunk in gen:
+                        if isinstance(chunk, dict) and "text" in chunk:
+                            out += chunk.get("text", "")
+                        elif isinstance(chunk, str):
+                            out += chunk
+                    return out.strip() or None
+                if isinstance(gen, str):
+                    return gen.strip() or None
         except Exception as e:
             logger.debug("Calculator/Datetime LLM interpret failed: %s", e)
         return None
@@ -321,6 +332,8 @@ MULTI-STEP: operation="multi_step", steps: [{"operation":"current_datetime"}, {"
             return all(args.get(field) is not None for field in required)
         if operation == "parse_calendar_dates":
             return bool((args.get("start_string") or args.get("start")) and (args.get("end_string") or args.get("end")))
+        if operation == "date_range":
+            return bool(args.get("start") and args.get("end"))
         if operation == "multi_step":
             return isinstance(args.get("steps"), list)
         return False
@@ -353,6 +366,9 @@ MULTI-STEP: operation="multi_step", steps: [{"operation":"current_datetime"}, {"
 
 5) PARSE CALENDAR DATES: Use when the user asks to parse start and end for a calendar event.
    Output: {"operation": "parse_calendar_dates", "start_string": "<start phrase>", "end_string": "<end phrase>"}
+
+6) DATE RANGE: Use when the user asks to determine the start and end dates of a relative or named PERIOD for filtering/reporting purposes (e.g. "last month", "this week", "next quarter", "second last month", "previous year", "last 2 weeks") — NOT a single calendar event's start/end time.
+   Output: {"operation": "date_range", "period_description": "<phrase describing the period, e.g. 'second last month'>"}
 
 User message: """
         prompt += (user_query or "").strip()[:600]
@@ -417,6 +433,46 @@ ISO string:"""
             except ValueError:
                 continue
         return None
+
+    async def _resolve_date_range_with_llm(self, phrase: str) -> Optional[Dict[str, str]]:
+        """
+        Resolve a relative/named period phrase (e.g. 'second last month', 'this week',
+        'last quarter') into start/end calendar-boundary dates via LLM. Generic — no
+        hardcoded phrase-to-date mapping.
+        """
+        if not phrase or not isinstance(phrase, str) or not phrase.strip():
+            return None
+        phrase = phrase.strip()[:200]
+        ref_date = date.today().isoformat()
+        prompt = f"""You are a date range interpreter. Given the phrase below, compute the start and end dates of that PERIOD as full calendar boundaries. For example: "last month" = first day to last day of the previous calendar month; "second last month" = first day to last day of the month two months before the current month; "this week" = Monday to Sunday of the current week; "last quarter" = first to last day of the previous calendar quarter; "next year" = January 1 to December 31 of next year. Use the current date as reference: {ref_date}. Output ONLY a JSON object: {{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}}. No explanation or markdown.
+
+Phrase: {phrase}
+
+JSON:"""
+        out = await self._llm_generate(prompt, max_tokens=100)
+        if not out:
+            return None
+        out = out.strip().strip("`").strip()
+        for prefix in ("json", "```"):
+            if out.lower().startswith(prefix):
+                out = out[len(prefix):].lstrip()
+        if out.endswith("```"):
+            out = out[:-3].strip()
+        try:
+            parsed = json.loads(out)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(parsed, dict):
+            return None
+        start = parsed.get("start")
+        end = parsed.get("end")
+        if not (isinstance(start, str) and isinstance(end, str)):
+            return None
+        start = start.strip()
+        end = end.strip()
+        if not (_ISO_STRICT_PATTERN.match(start) and _ISO_STRICT_PATTERN.match(end)):
+            return None
+        return {"start": start, "end": end}
 
     def _parse_natural_datetime(self, s: str) -> Optional[datetime]:
         """Parse natural language date/time (e.g. 'tomorrow at 10 PM') without relying on LLM. Uses dateutil if available, else deterministic rules."""
@@ -1003,7 +1059,10 @@ JSON:"""
                     args.update(parsed)
                     operation = (args.get("operation") or operation).strip().lower()
             # Parse query-string style (e.g. operation=date_parse&action=parse&date=tomorrow)
-            elif user_query and ("operation=" in user_query or "action=" in user_query):
+            # Skip when tool_args already supplies a valid operation — natural-language queries often
+            # contain "operation='x'" as prose, which the querystring parser mis-extracts (trailing
+            # punctuation / quotes) and corrupts the already-correct operation from tool_args.
+            elif user_query and ("operation=" in user_query or "action=" in user_query) and not operation:
                 parsed = self._parse_querystring_params(user_query)
                 if parsed:
                     args.update(parsed)
@@ -1119,6 +1178,24 @@ JSON:"""
                         "date_calculate", user_query or "", "Parse or calculation failed for the given date/params."
                     )
                     out = {"success": False, "operation": "date_calculate", "error": "Date calculation failed. Check date format and parameters." + (" " + suggestion if suggestion else "")}
+
+            elif operation == "date_range":
+                yield event(AgentEvent.THOUGHT, "Resolving date range for the requested period...")
+                phrase = (args.get("period_description") or args.get("period") or user_query or "").strip()
+                resolved = await self._resolve_date_range_with_llm(phrase)
+                if resolved:
+                    out = {
+                        "success": True,
+                        "result": resolved,
+                        "start": resolved.get("start"),
+                        "end": resolved.get("end"),
+                        "operation": "date_range",
+                    }
+                else:
+                    suggestion = await self._suggest_failure_recovery(
+                        "date_range", user_query or "", "Could not resolve start/end dates for the requested period."
+                    )
+                    out = {"success": False, "operation": "date_range", "error": "Could not determine the date range for the requested period." + (" " + suggestion if suggestion else "")}
 
             elif operation == "parse_calendar_dates":
                 yield event(AgentEvent.THOUGHT, "Parsing start and end dates for calendar event...")

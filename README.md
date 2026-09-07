@@ -1,7 +1,7 @@
-## 🚀 PlumoAI - We are in Beta. If you find any issues during setup then Join our Discord Live Support call on https://discord.gg/WarY2yWZkg 
+## 🚀 PlumoAI - We are in Public Beta from 7-Sep-2026. If you find any issues during setup then Join our Discord Live Support call on https://discord.gg/WarY2yWZkg 
 <img width="1024" height="388" alt="PlumoAIlogo" src="https://github.com/user-attachments/assets/43d692bd-912c-44eb-b13b-0a2ed0a1ce6e" />
 
-## 🌍 World's First 100% FREE Autonomous AI Employee Platform OR you can say AI Employees OS (Operating System)
+## 🌍 World's First 100% FREE Autonomous pre-trained AI Employees Platform OR you can say AI Employees OS (Operating System)
 
 ![GitHub stars](https://img.shields.io/github/stars/PlumoAI/plumoai?style=social)
 ![License](https://img.shields.io/badge/license-PlumoAI-blue)
@@ -205,9 +205,15 @@ A single AI Employee (Just like human) can use **multiple AI Agents simultaneous
 
 ### Build or update an AI Agent tool
 
-AI Agent tools live in `ai-agents/` in this repo and are mounted into the `ai-service` container at runtime.
+AI Agent tools live in `ai-agents/` in this repo and are mounted into the `ai-service` container at runtime. Reusable auth providers (Google, Microsoft, etc.) live alongside them in `service-providers/`.
 
 - Guide: [AI Agent Tool Creation Guide](docs/AI_AGENT_PLUGIN_CREATION_GUIDE.md)
+
+### Build or update a Workflow Node
+
+Deterministic, no-LLM workflow-builder building blocks (transform, filter, batch/loop, schedule-trigger, etc.) live in `nodes/` in this repo and are mounted into the `ai-service` container the same way. Use a Node for deterministic data/flow-control steps and an AI Agent for anything that reasons over natural language or calls a vendor API on behalf of a connected account.
+
+- Guide: [Workflow Node Creation Guide](docs/NODE_CREATION_GUIDE.md)
 
 ---
 
@@ -235,15 +241,26 @@ For production, use **domain mode** (HTTPS with Let's Encrypt). For local evalua
 
 - **Minimum**
   - **CPU**: 2 vCPU
-  - **RAM**: **16 GB** (required; the full stack needs enough headroom for MySQL, MongoDB, Milvus, and services)
+  - **RAM**: **16 GB** (required; the full stack needs enough headroom for MySQL, MongoDB, and services)
   - **Disk**: 30 GB free (SSD recommended)
 - **Recommended (production)**
   - **CPU**: 4+ vCPU
   - **RAM**: 32+ GB
-  - **Disk**: 100+ GB SSD (depends on file uploads + vector DB size)
+  - **Disk**: 100+ GB SSD (depends on file uploads + database size)
 - **Network (production / domain mode)**
   - Public IP + domain DNS `A/AAAA` → server IP
   - Inbound ports **80** and **443** open (Let’s Encrypt + routing)
+
+**This is a single-node reference deployment.** `docker-compose.yml` runs one MySQL container and one MongoDB container with `restart: unless-stopped` — that recovers a crashed container on the same host, but it is not high availability: a host failure takes the whole stack down, and there's no replication.
+
+If you need HA past a single host, point the stack at externally managed databases instead of running `mysql`/`mongodb` yourself — the services already read their DB host from env vars, so this needs no compose changes:
+
+```ini
+DB_HOST=your-managed-mysql-host       # e.g. an RDS/Cloud SQL endpoint
+MONGODB_HOST=your-managed-mongo-host  # e.g. an Atlas cluster
+```
+
+Then remove the `mysql`/`mongodb` services (and their `depends_on` entries) from your own `docker-compose.override.yml` if you don't want the local instances running alongside the managed ones.
 
 ### Windows (Production / Localhost)
 
@@ -292,7 +309,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 - Domain mode: `https://<your-domain>`
 - Localhost mode: `http://localhost:7861`
 
-#### Optional: Fresh install (resets MySQL volume)
+#### Optional: Fresh install (backs up, then resets MySQL volume)
 
 ```powershell
 .\install.ps1 -Fresh
@@ -354,7 +371,7 @@ chmod +x install.sh
 - Domain mode: `https://<your-domain>`
 - Localhost mode: `http://localhost:7861`
 
-#### Optional: Fresh install (resets MySQL volume)
+#### Optional: Fresh install (backs up, then resets MySQL volume)
 
 ```bash
 ./install.sh --fresh
@@ -416,7 +433,7 @@ chmod +x install.sh
 - Domain mode: `https://<your-domain>`
 - Localhost mode: `http://localhost:7861`
 
-#### Optional: Fresh install (resets MySQL volume)
+#### Optional: Fresh install (backs up, then resets MySQL volume)
 
 ```bash
 ./install.sh --fresh
@@ -437,8 +454,54 @@ docker compose logs --tail 200 -f traefik
 
 ### Optional: Update / change version (all platforms)
 
-1) Set `PLUMOAI_VERSION` in `.env` (or keep the default).  
-2) Re-run the installer for your OS (it will pull the new images and apply changes).
+1) **Back up first** — `./scripts/backup.sh` (or `.\scripts\backup.ps1`). An upgrade that goes wrong is only recoverable if you took a backup beforehand.
+2) Set `PLUMOAI_VERSION` in `.env` (or keep the default).
+3) Re-run the installer for your OS — it pulls the new images and restarts the containers.
+
+Database migrations are **not** a separate step: `auth` and `plumoai-api` run their own pending migrations as part of their container's startup, before the healthcheck reports healthy. When you update the version and restart, the new container image starts, applies whatever migrations ship with that version against the existing `mysql`/`mongodb` data, and only then starts serving traffic. If a migration fails, the container will not become healthy — check `docker compose logs auth` / `docker compose logs plumoai-api`, and restore the pre-upgrade backup if you need to roll back:
+
+```bash
+./scripts/restore.sh backups/<pre-upgrade-timestamp>
+```
+
+**Pinning an exact image** instead of trusting a tag at pull time: create a `docker-compose.override.yml` (compose merges it automatically) with the digest from the `images:` output the installer prints after every run:
+
+```yaml
+services:
+  auth:
+    image: plumoai/authservice@sha256:<digest-from-installer-output>
+```
+
+### Backups
+
+MySQL, MongoDB, and the Traefik TLS certificate store are not backed up automatically outside of `--fresh`/`-Fresh` (which backs up before it wipes the MySQL volume). Take a backup yourself before upgrades or any manual maintenance:
+
+```bash
+# Linux / macOS
+./scripts/backup.sh                 # writes to backups/<timestamp>/
+./scripts/restore.sh backups/<timestamp>
+```
+
+```powershell
+# Windows
+.\scripts\backup.ps1                # writes to backups/<timestamp>/
+.\scripts\restore.ps1 -InDir backups/<timestamp>
+```
+
+Copy the `backups/` folder off the host regularly — a local backup on the same disk doesn't protect against disk failure.
+
+### Optional: Monitoring
+
+An opt-in overlay (`docker-compose.monitoring.yml`) adds Prometheus, Grafana, cAdvisor, and node-exporter — container and host metrics, not started by default:
+
+```bash
+# Set a Grafana admin password first
+echo "GRAFANA_ADMIN_PASSWORD=$(openssl rand -base64 24)" >> .env
+
+docker compose --env-file .env -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+```
+
+Grafana is bound to `127.0.0.1:3001` by default — use an SSH tunnel, or put it behind Traefik with an auth middleware if you need remote access.
 
 ---
 

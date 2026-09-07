@@ -1172,7 +1172,11 @@ Thread summary:"""
     ) -> str:
         """Build enriched context from provided_data (other apps), tool_args, and any main-agent bullet context in the message."""
         brief = self._get_brief_from_user_message(user_query or "")
-        parts = [f"User request (task to fulfill): {brief[:600]}"]
+        # Full brief — no independent truncation here. The overall enriched_context
+        # already gets a single, token-budget-aware cap at the end of this method
+        # (_limit_context_tokens), so an extra fixed char cutoff on just this piece
+        # only risks silently cutting off the brief's own instructions/rules.
+        parts = [f"User request (task to fulfill): {brief}"]
         # Main agent may pass complete context as bullets in the message (workflow step)
         main_ctx = (user_query or "").strip()
         if (
@@ -1599,7 +1603,7 @@ Rules:
 
 Classification: {json.dumps(classification)}
 Derived request profile: {json.dumps(profile)}
-User request (this is the brief to fulfill; do not paste it into subject or body): {brief[:500]}
+User request (this is the brief to fulfill; do not paste it into subject or body): {brief}
 
 {_ec[:5000]}
 
@@ -1613,7 +1617,7 @@ Output JSON only with keys: subject, body. No markdown."""
             # Retry once with minimal prompt so we don't fail on transient LLM issues
             fallback_prompt = f"""Write a professional email as JSON. Keys: "subject", "body".
 The following is the user's *instruction* (brief) to fulfill. Do NOT use it as the subject or as the body text. Produce a real subject line (e.g. "Services Overview") and a body that fulfills the instruction. Do NOT include any "Complete context" or bullet-point context in the body — normal email only.
-Request (brief to fulfill): {brief[:400]}
+Request (brief to fulfill): {brief}
 Output only valid JSON, no markdown."""
             out = await self._llm_generate(fallback_prompt, max_tokens=800)
         if not out:
