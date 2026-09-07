@@ -257,6 +257,7 @@ services:
       LOCAL_STORAGE_PATH: /opt/plumoai/storage
       AI_EMPLOYEES_PATH: /opt/plumoai/ai-employees
       NODE_ENV: production
+      APP_HOST: ${APP_HOST}
       # One reverse proxy (Traefik) in front → Express/Nest req.ip / forwarded headers
       TRUST_PROXY: ${TRUST_PROXY:-1}
       DB_HOST: ${DB_HOST:-mysql}
