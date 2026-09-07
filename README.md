@@ -455,7 +455,7 @@ docker compose logs --tail 200 -f traefik
 ### Optional: Update / change version (all platforms)
 
 1) **Back up first** — `./scripts/backup.sh` (or `.\scripts\backup.ps1`). An upgrade that goes wrong is only recoverable if you took a backup beforehand.
-2) Set `PLUMOAI_VERSION` (and/or `PLUMOAI_API_VERSION`) in `.env` (or keep the default).
+2) Set `PLUMOAI_VERSION` in `.env` (or keep the default).
 3) Re-run the installer for your OS — it pulls the new images and restarts the containers.
 
 Database migrations are **not** a separate step: `auth` and `plumoai-api` run their own pending migrations as part of their container's startup, before the healthcheck reports healthy. When you update the version and restart, the new container image starts, applies whatever migrations ship with that version against the existing `mysql`/`mongodb` data, and only then starts serving traffic. If a migration fails, the container will not become healthy — check `docker compose logs auth` / `docker compose logs plumoai-api`, and restore the pre-upgrade backup if you need to roll back:

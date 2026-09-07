@@ -97,7 +97,7 @@ services:
 
   # Main app → https://self.plumoai.com (DOMAIN_NAME) — low priority so /api/* goes to auth/company
   main-app:
-    image: plumoai/plumoai-app:${PLUMOAI_VERSION:-v1.0.1}
+    image: plumoai/plumoai-app:${PLUMOAI_VERSION:-v1.0.4}
     container_name: main-app
     restart: unless-stopped
     healthcheck:
@@ -137,7 +137,7 @@ services:
   # internal = reach MySQL (hostname "mysql"); frontend = outbound internet (e.g. api.plumoai.com)
   # Secrets are mounted read-only at /run/secrets/<name>.
   auth:
-    image: plumoai/authservice:${PLUMOAI_VERSION:-v1.0.1}
+    image: plumoai/authservice:${PLUMOAI_VERSION:-v1.0.4}
     container_name: auth-service
     restart: unless-stopped
     depends_on:
@@ -214,7 +214,7 @@ services:
   #   /api/v1/*      -> kept by Traefik      -> nginx "/api/" location    -> public-api
   #   /ws/*          -> kept by Traefik      -> nginx "/ws/" location     -> websocket-api (WebSocket upgrade)
   plumoai-api:
-    image: plumoai/plumoai-api:${PLUMOAI_API_VERSION:-v1.0.1}
+    image: plumoai/plumoai-api:${PLUMOAI_VERSION:-v1.0.4}
     container_name: plumoai-api
     restart: unless-stopped
     depends_on:
@@ -343,7 +343,7 @@ services:
   # On native AMD64 hosts this is a no-op. Requires QEMU binfmt_misc on ARM hosts:
   #   docker run --privileged --rm tonistiigi/binfmt --install all
   ai:
-    image: plumoai/ai-service:${PLUMOAI_VERSION:-v1.0.1}
+    image: plumoai/ai-service:${PLUMOAI_VERSION:-v1.0.4}
     platform: linux/amd64
     container_name: ai-service
     restart: unless-stopped
