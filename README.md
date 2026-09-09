@@ -15,6 +15,7 @@
 ## 🤖 Hire AI Employees In Minutes. Works like human
 
 PlumoAI is the **world's first platform designed to run Autonomous AI Employees**.
+[if this saved you time and loved this github repo, a star helps others find it.]
 
 Companies do not hire people for their biology.
 They hire **employees to own work and deliver outcomes**.
@@ -65,20 +66,7 @@ and many more
 
 ---
 
-## 🧠 Powered By OpenClaw
 
-PlumoAI integrates **OpenClaw** (We have added this as an AI Agent) to provide advanced reasoning and autonomous workflow execution.
-
-AI Employees can:
-
-🧠 Plan tasks
-⚙️ Generate workflows
-🔄 Execute multi step operations
-📊 Interact with business systems
-
-This enables true **autonomous execution** across company operations.
-
----
 
 # 🏢 The Six Component Principle of an Employee
 
@@ -209,7 +197,7 @@ AI Agent tools live in `ai-agents/` in this repo and are mounted into the `ai-se
 
 - Guide: [AI Agent Tool Creation Guide](docs/AI_AGENT_PLUGIN_CREATION_GUIDE.md)
 
-### Build or update a Workflow Node
+### Build or update a Workflow Node (n8n style)
 
 Deterministic, no-LLM workflow-builder building blocks (transform, filter, batch/loop, schedule-trigger, etc.) live in `nodes/` in this repo and are mounted into the `ai-service` container the same way. Use a Node for deterministic data/flow-control steps and an AI Agent for anything that reasons over natural language or calls a vendor API on behalf of a connected account.
 
@@ -217,20 +205,6 @@ Deterministic, no-LLM workflow-builder building blocks (transform, filter, batch
 
 ---
 
-# 🗂 Built In Project Management Workspace
-
-PlumoAI includes a full **project management system** where humans and AI Employees collaborate.
-
-You can:
-
-✔ Create projects and tasks
-✔ Assign work to AI Employees
-✔ Monitor execution
-✔ Manage teams and operations
-
-This makes PlumoAI not just an AI platform but a **complete operational workspace**.
-
----
 
 ## Production Installation (Docker Compose)
 
@@ -556,36 +530,27 @@ https://plumoai.com/get-started
 
 ---
 
-# 🗺 Product Roadmap (Work in Progress)
+# 🗺 Product Roadmap
 
-### Phase 1 — Core Platform
+### Phase 1 — Core Platform, AI Agents Ecosystem, Pre-Trained AI Employees, n8n style workflow under each AI Employee.  (Launched - Done)
 
 AI Employee architecture
-OpenClaw integration
-Project management workspace
 Self hosted Docker deployment
-
----
-
-### Phase 2 — AI Agent Ecosystem
-
 Developer framework for AI Agents
 MCP based integrations
 Integration submission system
 
----
-
-### Phase 3 — AI Employee Templates
-
 Pre built employees for:
-
+Outreach - AI Outreach Manager
 Sales - like AI Sales Managers, AI Sales Executive etc
 Research - AI Research Manager
 Operations - AI Operationo Manager
 Marketing - AI Marketing Manager
 Product management - AI Product Manager
 
+### Phase 2 - AI Worker  (Work in progress)
 
+Use Open-source models only by converting existing your own laptops, mobiles, desktops or servers as AI worker.. save 90% token costs
 ---
 
 # 🌎 Community
