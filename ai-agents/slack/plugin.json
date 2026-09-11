@@ -1,0 +1,11 @@
+{
+  "plugin_id": "slack",
+  "app_codes": ["slack"],
+  "type": "python_tool_agent",
+  "display_name": "Slack Agent",
+  "description": "Slack AI Agent allows this AI Digital Employee to securely connect with Slack and manage workspace communication using natural language.\r\nThe agent can send messages, read channels, reply to threads, search messages, manage channels, list users, react to messages, and handle conversations strictly based on the permissions granted to the connected Slack credentials while maintaining privacy, security, and reliable messaging operations.",
+  "required_fields": [],
+  "service_provider_code": "slack",
+  "icon": "slack.svg",
+  "entrypoint": "entrypoint.py"
+}
