@@ -1,0 +1,11 @@
+{
+  "plugin_id": "github",
+  "app_codes": ["github"],
+  "type": "python_tool_agent",
+  "display_name": "GitHub Agent",
+  "description": "GitHub AI Agent allows this AI Digital Employee to securely connect with GitHub and manage repositories, issues, pull requests, branches, releases, code search, and file operations using natural language.\nThe agent can list repos, create issues, open pull requests, merge PRs, search code, manage branches and releases, and read or write file contents strictly based on the permissions granted to the connected GitHub credentials while maintaining privacy, security, and reliable operations.",
+  "required_fields": [],
+  "service_provider_code": "github",
+  "icon": "github.svg",
+  "entrypoint": "entrypoint.py"
+}
