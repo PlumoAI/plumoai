@@ -17,7 +17,7 @@
 services:
   traefik:
     command:
-      - "--api.insecure=true"
+      - "--api.insecure=false"
       - "--providers.docker=true"
       # Compose overlay files replace the whole command list, not merge it — this flag
       # has to be repeated here or Traefik silently falls back to dialing
@@ -40,7 +40,6 @@ services:
     # !override replaces (not merges) ports - avoids binding to 80 on Windows
     ports: !override
       - "0.0.0.0:${LOCALHOST_PORT:-7861}:80"
-      - "0.0.0.0:8080:8080"
 
   main-app:
     labels:
