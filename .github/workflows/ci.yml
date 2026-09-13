@@ -1,0 +1,78 @@
+name: CI
+
+# Lightweight checks that run on every pull request and on pushes to main.
+# All jobs are green on the current tree; each guards against a class of
+# breakage that is currently caught only by manual review, if at all.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shell:
+    name: Shell scripts (shellcheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck (*.sh, *.command)
+        run: |
+          # shellcheck is pre-installed on ubuntu-latest runners.
+          # git ls-files reliably finds tracked scripts at any depth, including
+          # the repo root, without depending on globstar behaviour.
+          mapfile -t files < <(git ls-files '*.sh' '*.command')
+          if [ ${#files[@]} -eq 0 ]; then echo "no shell scripts found"; exit 0; fi
+          printf 'checking:\n%s\n' "${files[*]}"
+          # -S error matches the current tree (it is clean at this severity).
+          # Tighten to warning once the existing style warnings are addressed.
+          shellcheck -S error "${files[@]}"
+
+  python:
+    name: Python (syntax + lint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Syntax check (py_compile) — blocking
+        run: |
+          mapfile -t pyfiles < <(git ls-files '*.py')
+          echo "compiling ${#pyfiles[@]} Python files"
+          python -m py_compile "${pyfiles[@]}"
+      - name: Lint (ruff) — informational
+        continue-on-error: true
+        run: |
+          pip install --quiet ruff
+          ruff check . || true
+
+  manifests:
+    name: Plugin & provider manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Validate plugin.json / provider.json
+        run: python3 .github/scripts/validate_plugins.py
+
+  compose:
+    name: docker-compose files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Validate compose YAML
+        run: |
+          pip install --quiet pyyaml
+          python3 .github/scripts/validate_compose.py
