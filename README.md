@@ -10,6 +10,12 @@
 ![AI Employees](https://img.shields.io/badge/AI%20Employees-autonomous-purple)
 ![Security](https://img.shields.io/badge/security-report%20issues%20responsibly-green)
 
+## Contributing
+
+We welcome contributions from developers, builders, and teams.
+
+Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a PR.
+
 ---
 
 ## 🤖 Hire AI Employees In Minutes. Works like human
